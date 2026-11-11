@@ -84,6 +84,9 @@ kbd{background:#2a3744;border:1px solid #445566;border-bottom-width:3px;border-r
 #loading{pointer-events:auto;position:fixed;inset:0;background:#0d141c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-weight:700;z-index:50}
 .spin{width:44px;height:44px;border-radius:50%;border:5px solid rgba(255,255,255,.15);border-top-color:var(--red);animation:sp 1s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+#rotate{display:none;position:fixed;inset:0;z-index:80;background:#0d141c;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px}
+@keyframes rot{0%,20%{transform:rotate(0)}50%,70%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+@media (orientation:portrait) and (pointer:coarse){body:not(.app) #rotate{display:flex}}
 /* ---------- HUD ---------- */
 #hud{position:fixed;inset:0;pointer-events:none}
 .pill{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;font-size:13px}
@@ -272,6 +275,7 @@ body.touch #gauge{width:230px;height:88px}
       <button class="big go" data-go="map">🗺️ &nbsp;Pilih Rute di Peta</button>
       <button class="big alt" data-go="garage">🚌 &nbsp;Garasi & Livery</button>
       <button class="big alt" data-go="help">❓ &nbsp;Cara Main</button>
+      <a class="big alt" id="dlApk" href="https://github.com/malfain/bus-simulator-nusantara/releases/latest/download/Bus-Nusantara.apk" style="text-decoration:none;color:inherit">📲 &nbsp;Download APK Android</a>
       <p class="small" style="margin-top:18px">Bus aktif: <b id="curBus"></b></p>
     </div>
   </div>
@@ -328,6 +332,7 @@ body.touch #gauge{width:230px;height:88px}
     <button class="big alt" data-go="main">Menu Utama</button>
   </div></div>
 </div>
+<div id="rotate"><div style="font-size:64px;animation:rot 1.6s ease-in-out infinite">📱</div><b>Putar HP ke posisi mendatar</b><span class="small">Semua layar game ini dimainkan miring supaya pandangan lebih luas</span><button class="big go" id="bLand" style="width:auto;padding:12px 22px">🔄 Mainkan layar penuh mendatar</button></div>
 <div id="loading" class="hidden"><div class="spin"></div><div id="loadTxt">Menyiapkan jalan...</div></div>
 
 <script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
@@ -1323,7 +1328,13 @@ let state = 'menu', B = null, busObj = null, traffic = [], anims = [];
 const keys = {};
 let camMode = 0, camYaw = 0, camPitch = 0, camZoom = 0, cine = null;
 
+async function goLandscape() {
+  if (window.flutter_inappwebview || !matchMedia('(pointer:coarse)').matches) return;
+  try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
+  try { await screen.orientation.lock('landscape'); } catch (e) {}
+}
 function startRoute(routeId) {
+  goLandscape();
   const route = ROUTES.find(r => r.id === routeId); save.route = routeId; persist();
   $('#loading').classList.remove('hidden'); $('#loadTxt').textContent = 'Menyiapkan jalan ' + route.name + '...';
   showScreen(null);
@@ -1947,6 +1958,9 @@ function loop(now) {
 showScreen('main');
 requestAnimationFrame(loop);
 // Android app (Flutter WebView) hooks: back button & app-in-background
+if (window.flutter_inappwebview || /wv\)/.test(navigator.userAgent)) { document.body.classList.add('app'); const d = document.getElementById('dlApk'); if (d) d.style.display = 'none'; }
+$('#bLand').onclick = goLandscape;
+addEventListener('pointerdown', () => { if (matchMedia('(orientation:portrait)').matches) return; goLandscape(); }, { once: true });
 window.__bsnPause = () => { if (state === 'drive') pause(true); };
 window.__bsnBack = () => { if (state === 'drive') pause(true); else if (state === 'pause') pause(false);
   else if (state === 'menu' && $('#scrMain').classList.contains('hidden')) showScreen('main'); };
