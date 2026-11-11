@@ -166,6 +166,9 @@ body.fpp #speedo{bottom:6px}
 #tTel{right:176px;bottom:186px;width:58px;height:58px;font-size:11px!important}
 #tDoor{right:26px;bottom:216px;width:58px;height:58px;font-size:12px!important}
 #tCam{right:26px;bottom:284px;width:58px;height:58px;font-size:12px!important}
+#tFuel{right:96px;bottom:176px;width:62px;height:62px;font-size:11px!important;background:rgba(215,25,45,.75)!important;border-color:#ff8a8a!important}
+#tFuel.ready{animation:pulse 0.9s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.12);box-shadow:0 0 18px #ff4a3a}}
 body.touch #hint{display:none}
 body.touch #speedo{bottom:auto;top:auto;bottom:8px}
 body.touch #gauge{width:230px;height:88px}
@@ -209,6 +212,7 @@ body.touch #gauge{width:230px;height:88px}
   #tHorn{right:132px!important;bottom:50px!important;width:46px!important;height:46px!important}
   #tTel{right:184px!important;bottom:50px!important;width:46px!important;height:46px!important}
   #tCam{display:none}
+  #tFuel{right:194px!important;bottom:6px!important;width:56px!important;height:40px!important;border-radius:12px!important;font-size:10px!important}
   #speedo{bottom:4px}.ind{font-size:10px;padding:2px 8px}
   #toast{top:30%;font-size:13px;padding:8px 14px}
 }
@@ -242,7 +246,7 @@ body.touch #gauge{width:230px;height:88px}
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / panah: nyetir<br>
     <kbd>Spasi</kbd> rem tangan · <kbd>E</kbd> pintu<br>
     <kbd>H</kbd> klakson · <kbd>T</kbd> TELOLET!<br>
-    <kbd>Z</kbd>/<kbd>X</kbd> sein · <kbd>L</kbd> lampu<br><kbd>V</kbd> FPP/TPP · <kbd>C</kbd>/<kbd>1</kbd>-<kbd>6</kbd> kamera · <kbd>F</kbd> foto<br>
+    <kbd>Z</kbd>/<kbd>X</kbd> sein · <kbd>L</kbd> lampu<br><kbd>V</kbd> FPP/TPP · <kbd>C</kbd>/<kbd>1</kbd>-<kbd>6</kbd> kamera · <kbd>F</kbd> foto<br><kbd>B</kbd> isi bensin di SPBU<br>
     <kbd>Esc</kbd> jeda · seret mouse: putar kamera
   </div>
   <div id="hudBtns"><button id="bView" title="FPP / TPP (V)" style="width:auto;padding:0 10px;font-size:13px;font-weight:800">FPP</button><button id="bCtl" title="Kontrol layar: setir & pedal">🕹️</button><button id="bCam" title="Ganti kamera (C)">🎥</button><button id="bPhoto" title="Ambil foto (F)">📷</button><button id="bMute" title="Suara">🔊</button><button id="bPause" title="Jeda">⏸</button></div>
@@ -261,7 +265,7 @@ body.touch #gauge{width:230px;height:88px}
   </div>
   <div id="touch" class="hidden">
     <button id="tHorn" data-k="KeyH">TIN</button><button id="tTel" data-k="KeyT">TELO<br>LET</button>
-    <button id="tDoor" data-k="KeyE">PINTU</button><button id="tCam" data-k="KeyV">FPP<br>TPP</button>
+    <button id="tDoor" data-k="KeyE">PINTU</button><button id="tFuel" data-k="KeyB" class="hidden">⛽<br>ISI BBM</button><button id="tCam" data-k="KeyV">FPP<br>TPP</button>
   </div>
 </div>
 
@@ -1414,6 +1418,7 @@ function press(c) {
     else if (c === 'KeyC') nextCam();
     else if (c === 'KeyF') takePhoto();
     else if (c === 'KeyV') toggleView();
+    else if (c === 'KeyB') { if (RUN.refuel) stopRefuel(); else if (inPumpZone() && Math.abs(B.v) < 0.5) toggleRefuel(); else toast('⛽ Masuk SPBU dan berhenti di kotak merah <b>ISI BBM</b> dulu', '', 2.2); }
     else if (c === 'KeyG') setLever({ A: 'D', D: 'N', N: 'R', R: 'D' }[B.lever]);
     else if (/^Digit[1-6]$/.test(c)) setCam(+c[5] - 1);
     else if (c === 'KeyZ') { B.sigL = !B.sigL; B.sigR = false; Snd.click(); }
@@ -1441,7 +1446,7 @@ $('#bPause').onclick = () => pause(true);
 const UI = { rot: 0, drag: false, last: 0, gas: false, brk: false };
 { const w = $('#sWheel'); const ang = e => { const r = w.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)); };
   w.addEventListener('pointerdown', e => { UI.drag = true; UI.last = ang(e); w.setPointerCapture(e.pointerId); e.preventDefault(); });
-  w.addEventListener('pointermove', e => { if (!UI.drag) return; const a = ang(e); let d = a - UI.last; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; UI.last = a; UI.rot = clamp(UI.rot + d * 180 / Math.PI, -270, 270); });
+  w.addEventListener('pointermove', e => { if (!UI.drag) return; const a = ang(e); let d = a - UI.last; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; UI.last = a; UI.rot = clamp(UI.rot + d * 180 / Math.PI, -540, 540); });
   const up = () => UI.drag = false; w.addEventListener('pointerup', up); w.addEventListener('pointercancel', up);
   for (const [id, k] of [['#pGas', 'gas'], ['#pBrk', 'brk']]) { const el = $(id);
     el.addEventListener('pointerdown', e => { UI[k] = true; el.classList.add('on'); el.setPointerCapture(e.pointerId); e.preventDefault(); });
@@ -1511,7 +1516,7 @@ function toggleMute() { Snd.setMute(save.sound); $('#bMute').textContent = save.
 $('#bMute').textContent = save.sound ? '🔊' : '🔇';
 
 function toggleRefuel() { if (RUN.refuel) return stopRefuel(); if (B.fuel >= 99) { toast('⛽ Tangki sudah penuh', '', 1.5); return; }
-  RUN.refuel = true; RUN.fuelAcc = 0; toast('⛽ Mengisi solar... (E untuk berhenti)', 'good', 2); Snd.noise(0.5, 400, 0.15, 0.8); }
+  RUN.refuel = true; RUN.fuelAcc = 0; toast(MOBILE ? '⛽ Mengisi solar... (tekan ⛽ STOP untuk berhenti)' : '⛽ Mengisi solar... (B untuk berhenti)', 'good', 2); Snd.noise(0.5, 400, 0.15, 0.8); }
 function stopRefuel() { RUN.refuel = false; if (RUN.fuelAcc > 0.3) coin('-' + fmtRp(RUN.fuelAcc * 6800), true); RUN.fuelAcc = 0; toast(`⛽ Tangki ${Math.round(B.fuel)}% · Total beli solar ${fmtRp(RUN.fuelCost)}`, 'good', 2.5); }
 function toggleDoor() {
   if (B.doorT < 0.5) { if (Math.abs(B.v) > 1) { toast('Berhenti dulu sebelum buka pintu!', 'bad'); return; } B.doorT = 1; }
@@ -1529,10 +1534,13 @@ function update(dt) {
   RUN.time += dt; RUN.odo = (RUN.odo || 0) + Math.abs(B.v) * dt / 1000;
   const t = B.t, vmax = t.vmax / 3.6;
   let thr = (down('KeyW') || down('ArrowUp') || UI.gas) ? 1 : 0, brk = (down('KeyS') || down('ArrowDown') || UI.brk) ? 1 : 0;
-  if (!UI.drag) UI.rot *= Math.max(0, 1 - dt * 3.5);
+  // heavy, stable steering: on-screen wheel needs 1.5 turns for full lock (finer near centre); keys turn the wheel gradually
+  if (!UI.drag) UI.rot *= Math.max(0, 1 - dt * 2.2);
   const keySteer = ((down('KeyA') || down('ArrowLeft')) ? 1 : 0) - ((down('KeyD') || down('ArrowRight')) ? 1 : 0);
-  const steerIn = (UI.drag || Math.abs(UI.rot) > 3) ? clamp(-UI.rot / 270, -1, 1) : keySteer;
-  UI.vis = (UI.drag || Math.abs(UI.rot) > 3) ? UI.rot : -B.steer / 0.62 * 270;
+  UI.key = (UI.key || 0) + clamp(keySteer - (UI.key || 0), -dt * (keySteer ? 1.1 : 1.8), dt * (keySteer ? 1.1 : 1.8));
+  const wheelOn = UI.drag || Math.abs(UI.rot) > 3, wx = clamp(-UI.rot / 540, -1, 1);
+  const steerIn = wheelOn ? Math.sign(wx) * Math.pow(Math.abs(wx), 1.5) : UI.key;
+  UI.vis = wheelOn ? UI.rot : -UI.key * 540;
   if (B.lever === 'R') { [thr, brk] = [brk, thr]; if (Math.abs(B.v) < 0.25) B.dir = -1; }
   else if (B.lever === 'N') thr = 0;
   else if (B.lever === 'D' && Math.abs(B.v) < 0.25) B.dir = 1;
@@ -1562,8 +1570,8 @@ function update(dt) {
   if (Math.abs(B.v) < 0.05 && !thr && !brk) B.v = 0;
   if (B.door > 0.02) B.v *= Math.max(0, 1 - dt * 3);
   // steering
-  const target = steerIn * 0.62 / (1 + Math.abs(B.v) / 11);
-  B.steer += (target - B.steer) * Math.min(1, dt * (steerIn ? 3.2 : 4.5));
+  const target = steerIn * 0.6 / (1 + Math.abs(B.v) / 7);          // less lock at speed → no twitchy lane changes
+  B.steer += (target - B.steer) * Math.min(1, dt * 2.2);
   const prev = { x: B.x, z: B.z, h: B.h, s: B.s, lat: B.lat, idx: B.idx };
   const wb = t.len * 0.56; B.h += B.v * Math.tan(B.steer) / wb * dt;
   B.x += Math.sin(B.h) * B.v * dt; B.z += Math.cos(B.h) * B.v * dt;
@@ -1589,7 +1597,7 @@ function update(dt) {
   const g = busObj.group; g.position.set(B.x, B.y, B.z); g.rotation.set(B.pitch, B.h, B.roll, 'YXZ');
   { const e = B.door * B.door * (3 - 2 * B.door); busObj.door.rotation.y = -1.35 * e; busObj.door.position.x = t.w / 2 + 0.01 + e * 0.12; }
   busObj.wheels.forEach(w => { w.sp.rotation.x += B.v * dt / 0.52; if (w.front) w.st.rotation.y = B.steer; });
-  busObj.swheel.rotation.z = -B.steer * 6;
+  busObj.swheel.rotation.z = -steerIn * 9.4;
   const blink = Math.floor(RUN.time * 2.6) % 2 === 0;
   busObj.sigLM.emissiveIntensity = B.sigL && blink ? 3 : 0.1; busObj.sigRM.emissiveIntensity = B.sigR && blink ? 3 : 0.1;
   busObj.brakeM.emissiveIntensity = (brk && B.dir > 0 && B.v > 0.1) || down('Space') ? 3 : (B.lights ? 1 : 0.2);
@@ -1715,6 +1723,8 @@ function toast(html, cls = '', dur = 3) { const el = $('#toast'); el.innerHTML =
 function coin(txt, neg) { const c = document.createElement('div'); c.className = 'coin' + (neg ? ' neg' : ''); c.textContent = txt; $('#coins').appendChild(c); setTimeout(() => c.remove(), 1300); }
 let hudT = 0;
 function updateHud(dt) {
+  { const near = RUN.refuel || inSpbu(B.s, B.lat) || T.spbu.some(f => f - B.s > -30 && f - B.s < 350) || B.fuel < 15, ready = inPumpZone() && Math.abs(B.v) < 0.5 && !RUN.refuel;
+    const fb = $('#tFuel'); fb.classList.toggle('hidden', !near); fb.classList.toggle('ready', ready); const fh = RUN.refuel ? '⛽<br>STOP' : '⛽<br>ISI BBM'; if (fb.innerHTML !== fh) fb.innerHTML = fh; }
   drawGauges(); if (gaugeTex && (camMode === 1 || (RUN.gT = (RUN.gT || 0) + 1) % 6 === 0)) gaugeTex.needsUpdate = true; drawGPS(); updatePark(dt); updateLever();
   { const [a, tt, st, warn] = navInfo(); if ($('#navA').textContent !== a) $('#navA').textContent = a; if ($('#navT').textContent !== tt) $('#navT').textContent = tt; if ($('#navS').textContent !== (st || '')) $('#navS').textContent = st || ''; $('#nav').classList.toggle('warn', !!warn); }
   toastTimer -= dt; if (toastTimer <= 0) $('#toast').classList.remove('show');
@@ -1739,8 +1749,8 @@ function navInfo() {
     if (d < 140 && d > -45) { if (B.lat < 6.5 && d > 35) return ['↰', `Belok kiri masuk terminal`, `Terminal ${name} · ${Math.round(d - 35)} m`, true];
       return [d > 0 ? '⬆' : '⬇', d > 0 ? 'Maju ke JALUR 1' : 'Mundur ke JALUR 1', `Kotak kuning · ${Math.round(Math.abs(d))} m`, true]; }
   }
-  if (RUN.refuel) return ['⛽', `Mengisi solar ${Math.round(B.fuel)}%`, `Biaya ${fmtRp(RUN.fuelCost)} · E untuk berhenti`];
-  if (inPumpZone() && B.fuel < 99) return ['⛽', Math.abs(B.v) > 0.4 ? 'Berhenti di dispenser' : 'Tekan E untuk isi solar', `Tangki ${Math.round(B.fuel)}% · Rp 6.800/L`, true];
+  if (RUN.refuel) return ['⛽', `Mengisi solar ${Math.round(B.fuel)}%`, `Biaya ${fmtRp(RUN.fuelCost)} · ${MOBILE ? 'tombol ⛽ STOP' : 'B'} untuk berhenti`];
+  if (inPumpZone() && B.fuel < 99) return ['⛽', Math.abs(B.v) > 0.4 ? 'Berhenti di dispenser' : (MOBILE ? 'Tekan tombol ⛽ ISI BBM' : 'Tekan B / E untuk isi solar'), `Tangki ${Math.round(B.fuel)}% · Rp 6.800/L`, true];
   if (inSpbu(B.s, B.lat)) { const f = T.spbu.find(f => Math.abs(B.s - f) < SP_S); return f - B.s > 7 && B.fuel < 99 ? ['⬆', 'Maju ke dispenser', `Kotak merah ISI BBM · ${Math.round(f - B.s)} m`] : ['↱', 'Keluar SPBU', 'Belok kanan ke jalan raya']; }
   { const f = T.spbu.find(f => f - B.s > 30 && f - B.s < 330); if (f !== undefined && B.fuel < 80 && B.lat < 6.5) return ['↰', `SPBU di kiri ${Math.round(f - B.s - 30)} m`, B.fuel < 25 ? `Bensin tinggal ${Math.round(B.fuel)}%!` : 'Belok kiri untuk isi bensin', true]; }
   if (B.fuel < 20) { const f = T.spbu.find(f => f > B.s); return ['⛽', `Bensin tinggal ${Math.round(B.fuel)}%!`, f !== undefined ? `SPBU ${((f - B.s) / 1000).toFixed(1)} km lagi` : 'Hemat gas ya', true]; }
