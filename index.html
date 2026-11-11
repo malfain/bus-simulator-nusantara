@@ -328,6 +328,9 @@ body.touch #gauge{width:230px;height:88px}
     <button class="big alt" id="bRestart">Ulangi Rute</button>
     <button class="big alt" id="bQuit">Keluar ke Menu</button>
   </div></div>
+  <!-- DIALOG -->
+  <div class="modal hidden" id="scrDlg" style="z-index:60"><div class="card"><h2 id="dlgT"></h2><p id="dlgM" style="color:#d5dee6"></p>
+    <button class="big go" id="dlgYes">Ya</button><button class="big alt" id="dlgNo">Batal</button></div></div>
   <!-- FINISH -->
   <div class="modal hidden" id="scrFinish"><div class="card">
     <h2>🏁 Rute Selesai!</h2><p class="small" id="finRoute"></p>
@@ -376,6 +379,18 @@ const CITIES = {
   surabaya: ['Surabaya', 112.75, -7.25], malang: ['Malang', 112.63, -7.98], probolinggo: ['Probolinggo', 113.22, -7.75], jember: ['Jember', 113.70, -8.17], banyuwangi: ['Banyuwangi', 114.37, -8.22],
   denpasar: ['Denpasar', 115.22, -8.65], tabanan: ['Tabanan', 115.12, -8.54], negara: ['Negara', 114.62, -8.36], gilimanuk: ['Gilimanuk', 114.44, -8.17],
   medan: ['Medan', 98.67, 3.59], siantar: ['Pematangsiantar', 99.07, 2.96], parapat: ['Parapat', 98.93, 2.66], bukittinggi: ['Bukittinggi', 100.37, -0.31], padang: ['Padang', 100.36, -0.95],
+  purwokerto: ['Purwokerto', 109.24, -7.43], brebes: ['Brebes', 109.04, -6.87], kebumen: ['Kebumen', 109.65, -7.67], purworejo: ['Purworejo', 110.01, -7.71],
+  garut: ['Garut', 107.9, -7.22], tasikmalaya: ['Tasikmalaya', 108.22, -7.33], banjar: ['Banjar', 108.54, -7.37], cilacap: ['Cilacap', 109.0, -7.73],
+  wonosobo: ['Wonosobo', 109.9, -7.36], banjarnegara: ['Banjarnegara', 109.69, -7.4], bogor: ['Bogor', 106.8, -6.6], sukabumi: ['Sukabumi', 106.93, -6.92],
+  kudus: ['Kudus', 110.84, -6.8], rembang: ['Rembang', 111.34, -6.7], tuban: ['Tuban', 112.05, -6.9], madiun: ['Madiun', 111.52, -7.63], kediri: ['Kediri', 112.01, -7.82],
+  bandarlampung: ['Bandar Lampung', 105.26, -5.43], kotabumi: ['Kotabumi', 104.9, -4.83], baturaja: ['Baturaja', 104.17, -4.13], palembang: ['Palembang', 104.76, -2.98],
+  jambi: ['Jambi', 103.6, -1.6], pekanbaru: ['Pekanbaru', 101.45, 0.51],
+  balikpapan: ['Balikpapan', 116.83, -1.27], samarinda: ['Samarinda', 117.15, -0.5], bontang: ['Bontang', 117.5, 0.13],
+  banjarmasin: ['Banjarmasin', 114.59, -3.32], kualakapuas: ['Kuala Kapuas', 114.39, -3.0], palangkaraya: ['Palangkaraya', 113.92, -2.21],
+  pontianak: ['Pontianak', 109.33, -0.03], mempawah: ['Mempawah', 108.96, 0.36], singkawang: ['Singkawang', 108.99, 0.9],
+  manado: ['Manado', 124.84, 1.47], kotamobagu: ['Kotamobagu', 124.32, 0.73], gorontalo: ['Gorontalo', 123.06, 0.54],
+  mataram: ['Mataram', 116.1, -8.58], sumbawa: ['Sumbawa Besar', 117.42, -8.49], dompu: ['Dompu', 118.46, -8.54], bima: ['Bima', 118.72, -8.46],
+  labuanbajo: ['Labuan Bajo', 119.88, -8.49], ruteng: ['Ruteng', 120.46, -8.61], bajawa: ['Bajawa', 120.97, -8.79], ende: ['Ende', 121.66, -8.84],
   makassar: ['Makassar', 119.43, -5.15], maros: ['Maros', 119.57, -5.0], parepare: ['Parepare', 119.62, -4.01], rantepao: ['Rantepao', 119.9, -2.97],
 };
 const ROUTES = [
@@ -386,11 +401,30 @@ const ROUTES = [
   { id: 'bali', name: 'Denpasar – Gilimanuk', region: 'bali', desc: 'Pura, sawah terasering, dan pantai barat Bali.', stops: ['denpasar', 'tabanan', 'negara', 'gilimanuk'], curvy: 0.75, hilly: 0.55 },
   { id: 'sumut', name: 'Medan – Padang', region: 'sumatra', desc: 'Lintas Sumatra! Danau Toba, kebun sawit, & Bukittinggi.', stops: ['medan', 'siantar', 'parapat', 'bukittinggi', 'padang'], curvy: 1, hilly: 1.15 },
   { id: 'sulsel', name: 'Makassar – Toraja', region: 'sulawesi', desc: 'Naik ke pegunungan Tana Toraja dengan rumah tongkonan.', stops: ['makassar', 'maros', 'parepare', 'rantepao'], curvy: 1, hilly: 1.25 },
+  { id: 'jktpwt', name: 'Jakarta – Purwokerto', region: 'jawa', desc: 'Pantura sampai Brebes lalu belok ke selatan menuju kaki Gunung Slamet.', stops: ['jakarta', 'cirebon', 'brebes', 'purwokerto'], curvy: 0.6, hilly: 0.55 },
+  { id: 'pwtjog', name: 'Purwokerto – Yogyakarta', region: 'jawa', desc: 'Jalur selatan Jawa Tengah: Kebumen, Purworejo, sampai Yogya.', stops: ['purwokerto', 'kebumen', 'purworejo', 'yogyakarta'], curvy: 0.65, hilly: 0.45 },
+  { id: 'bdgpwt', name: 'Bandung – Purwokerto', region: 'jawa', desc: 'Lintas Priangan berkelok: Garut, Tasikmalaya, Banjar.', stops: ['bandung', 'garut', 'tasikmalaya', 'banjar', 'purwokerto'], curvy: 1, hilly: 1.1 },
+  { id: 'smgpwt', name: 'Semarang – Purwokerto', region: 'jawa', desc: 'Naik ke dataran tinggi Wonosobo lalu turun ke Banjarnegara.', stops: ['semarang', 'wonosobo', 'banjarnegara', 'purwokerto'], curvy: 1, hilly: 1.2 },
+  { id: 'pwtclp', name: 'Purwokerto – Cilacap', region: 'jawa', desc: 'Rute pendek ke kota pelabuhan di pantai selatan.', stops: ['purwokerto', 'cilacap'], curvy: 0.5, hilly: 0.3 },
+  { id: 'jktsmi', name: 'Jakarta – Sukabumi', region: 'jawa', desc: 'Lewat Bogor menembus perkebunan teh yang sejuk.', stops: ['jakarta', 'bogor', 'sukabumi'], curvy: 0.9, hilly: 1 },
+  { id: 'smgsby', name: 'Semarang – Surabaya', region: 'jawa', desc: 'Pantura timur: Kudus, Rembang, Tuban, pantai utara.', stops: ['semarang', 'kudus', 'rembang', 'tuban', 'surabaya'], curvy: 0.4, hilly: 0.2 },
+  { id: 'slomlg', name: 'Solo – Malang', region: 'jawa', desc: 'Jalur tengah via Madiun dan Kediri.', stops: ['solo', 'madiun', 'kediri', 'malang'], curvy: 0.7, hilly: 0.6 },
+  { id: 'lpgplg', name: 'Lampung – Palembang', region: 'sumatra', desc: 'Jalan lintas timur Sumatra melewati kebun sawit.', stops: ['bandarlampung', 'kotabumi', 'baturaja', 'palembang'], curvy: 0.6, hilly: 0.5 },
+  { id: 'plgpku', name: 'Palembang – Pekanbaru', region: 'sumatra', desc: 'Rute panjang ke utara via Jambi.', stops: ['palembang', 'jambi', 'pekanbaru'], curvy: 0.5, hilly: 0.35 },
+  { id: 'bpnbtg', name: 'Balikpapan – Bontang', region: 'kalimantan', desc: 'Kalimantan Timur: hutan tropis & Samarinda di tepi Mahakam.', stops: ['balikpapan', 'samarinda', 'bontang'], curvy: 0.8, hilly: 0.7 },
+  { id: 'bjmpky', name: 'Banjarmasin – Palangkaraya', region: 'kalimantan', desc: 'Jalan datar di tanah gambut Kalimantan Tengah.', stops: ['banjarmasin', 'kualakapuas', 'palangkaraya'], curvy: 0.35, hilly: 0.15 },
+  { id: 'ptkskw', name: 'Pontianak – Singkawang', region: 'kalimantan', desc: 'Menyusuri pesisir barat Kalimantan.', stops: ['pontianak', 'mempawah', 'singkawang'], curvy: 0.5, hilly: 0.3 },
+  { id: 'mdogtl', name: 'Manado – Gorontalo', region: 'sulut', desc: 'Lintas Sulawesi utara yang naik-turun bukit kelapa.', stops: ['manado', 'kotamobagu', 'gorontalo'], curvy: 1, hilly: 1.1 },
+  { id: 'mtrbma', name: 'Mataram – Bima', region: 'nusa', desc: 'Lintas Lombok–Sumbawa dengan sabana Nusa Tenggara.', stops: ['mataram', 'sumbawa', 'dompu', 'bima'], curvy: 0.8, hilly: 0.8 },
+  { id: 'lbjende', name: 'Labuan Bajo – Ende', region: 'nusa', desc: 'Trans Flores: jalan pegunungan paling berkelok.', stops: ['labuanbajo', 'ruteng', 'bajawa', 'ende'], curvy: 1.2, hilly: 1.3 },
 ];
 const REGIONS = {
   jawa: { grass: 0x5d9a35, hill: 0x2f6b26, sawah: 0xb2d84a, water: 0x6a9fb0, sawahAmt: 0.85, palm: 0.3, tree: 0.75, roofs: [0xb5452b, 0xc45a32, 0x9a3b22, 0xd06a3a], mosque: 0.5, pura: 0, tongkonan: 0, sawit: 0 },
   bali: { grass: 0x5aa03a, hill: 0x2e7028, sawah: 0xbadf4c, water: 0x6aa0b0, sawahAmt: 0.95, palm: 0.55, tree: 0.7, roofs: [0x6b4a3a, 0x8a5a3a, 0xb5452b], mosque: 0.05, pura: 1, tongkonan: 0, sawit: 0 },
   sumatra: { grass: 0x4e8f32, hill: 0x24581f, sawah: 0xa8d048, water: 0x6a98a8, sawahAmt: 0.35, palm: 0.4, tree: 0.95, roofs: [0x7a7f86, 0xb5452b, 0x5b6570, 0x8a8f96], mosque: 0.45, pura: 0, tongkonan: 0, sawit: 1 },
+  kalimantan: { grass: 0x3f8a2e, hill: 0x1f5a1c, sawah: 0x9cc844, water: 0x5a7a6a, sawahAmt: 0.2, palm: 0.5, tree: 1.0, roofs: [0x7a7f86, 0x8a6a4a, 0x5b6570], mosque: 0.45, pura: 0, tongkonan: 0, sawit: 1 },
+  sulut: { grass: 0x5a9638, hill: 0x2b6224, sawah: 0xaed24a, water: 0x6a9aa8, sawahAmt: 0.3, palm: 0.9, tree: 0.7, roofs: [0x7a7f86, 0xb5452b, 0x3a6aa8], mosque: 0.3, pura: 0, tongkonan: 0, sawit: 0 },
+  nusa: { grass: 0x8a9a48, hill: 0x5e7a34, sawah: 0xb6c858, water: 0x7a9aa0, sawahAmt: 0.3, palm: 0.4, tree: 0.45, roofs: [0x7a7f86, 0xa04a2a, 0x6a5a4a], mosque: 0.35, pura: 0, tongkonan: 0, sawit: 0 },
   sulawesi: { grass: 0x5a9638, hill: 0x2b6224, sawah: 0xaed24a, water: 0x6a9aa8, sawahAmt: 0.45, palm: 0.45, tree: 0.85, roofs: [0x7a7f86, 0xb5452b, 0x5b4a3a], mosque: 0.3, pura: 0, tongkonan: 1, sawit: 0 },
 };
 const BUSES = {
@@ -1907,7 +1941,7 @@ function buildMap() {
   svg.innerHTML = h;
   svg.querySelectorAll('.rt').forEach(el => el.onclick = () => { selRoute = el.dataset.r; buildMap(); });
   // list
-  $('#rList').innerHTML = ROUTES.map(r => `<button class="rcard ${r.id === selRoute ? 'sel' : ''}" data-r="${r.id}"><b>${r.name}${save.done[r.id] ? '<span class="tag ok">✓ selesai</span>' : ''}<span class="tag">${REGIONS[r.region] && { jawa: 'Jawa', bali: 'Bali', sumatra: 'Sumatra', sulawesi: 'Sulawesi' }[r.region]}</span></b><span>${r.stops.length} terminal · ${routeKm(r)} km</span></button>`).join('');
+  $('#rList').innerHTML = ROUTES.map(r => `<button class="rcard ${r.id === selRoute ? 'sel' : ''}" data-r="${r.id}"><b>${r.name}${save.done[r.id] ? '<span class="tag ok">✓ selesai</span>' : ''}<span class="tag">${REGIONS[r.region] && { jawa: 'Jawa', bali: 'Bali', sumatra: 'Sumatra', sulawesi: 'Sulawesi', sulut: 'Sulawesi', kalimantan: 'Kalimantan', nusa: 'Nusa Tenggara' }[r.region]}</span></b><span>${r.stops.length} terminal · ${routeKm(r)} km</span></button>`).join('');
   $('#rList').querySelectorAll('.rcard').forEach(el => el.onclick = () => { selRoute = el.dataset.r; buildMap(); });
   const km = routeKm(sr), est = Math.round(km * FARE_PER_KM * BUSES[save.bus].cap * 0.55 / 10000) * 10000;
   $('#rInfo').innerHTML = `<b style="font-size:17px">${sr.name}</b><div class="small">${sr.desc}</div>
@@ -1926,7 +1960,7 @@ function routeKm(r) { let s = 0; for (let i = 0; i < r.stops.length - 1; i++) s 
 function buildGarage() {
   $('#busList').innerHTML = Object.entries(BUSES).map(([id, b]) => { const own = save.buses.includes(id);
     return `<button class="item ${save.bus === id ? 'sel' : ''}" data-b="${id}"><div class="t"><b>${b.name}</b><span>${b.desc} · ${b.cap} kursi · ${b.vmax} km/jam</span></div><div class="p ${own ? 'own' : ''}">${save.bus === id ? 'DIPAKAI' : own ? 'PUNYA' : fmtRp(b.price)}</div></button>`; }).join('');
-  $('#livList').innerHTML = Object.entries(LIVERIES).map(([id, l]) => { const own = save.liveries.includes(id), bg = l.grad ? `linear-gradient(90deg,${l.grad[0]},${l.grad[1]})` : `linear-gradient(180deg,${l.base} 55%,${l.stripes[0][0]} 55%)`;
+  $('#livList').innerHTML = Object.entries(LIVERIES).map(([id, l]) => { const own = save.liveries.includes(id), bg = l.grad ? `linear-gradient(90deg,${l.grad[0]},${l.grad[1]})` : `linear-gradient(180deg,${l.base} 55%,${l.swoosh || (l.stripes[0] ? l.stripes[0][0] : l.text)} 55%)`;
     return `<button class="item ${save.livery === id ? 'sel' : ''}" data-l="${id}"><div class="sw" style="background:${bg}"></div><div class="t"><b>${l.name}</b></div><div class="p ${own ? 'own' : ''}">${save.livery === id ? 'DIPAKAI' : own ? 'PUNYA' : fmtRp(l.price)}</div></button>`; }).join('');
   $('#busList').querySelectorAll('.item').forEach(el => el.onclick = () => buy('bus', el.dataset.b));
   $('#livList').querySelectorAll('.item').forEach(el => el.onclick = () => buy('liv', el.dataset.l));
@@ -1934,10 +1968,17 @@ function buildGarage() {
 function buy(kind, id) {
   const own = kind === 'bus' ? save.buses : save.liveries, price = kind === 'bus' ? BUSES[id].price : LIVERIES[id].price;
   if (!own.includes(id)) { if (save.money < price) { flashMsg('Saldo belum cukup! Selesaikan rute dulu untuk cari uang.'); return; }
-    if (!confirm(`Beli ${kind === 'bus' ? BUSES[id].name : LIVERIES[id].name} seharga ${fmtRp(price)}?`)) return; save.money -= price; own.push(id); Snd.init(); Snd.ding(); }
-  if (kind === 'bus') save.bus = id; else save.livery = id; persist(); buildGarage(); refreshMoney(); refreshShowroom();
+    const nm = kind === 'bus' ? BUSES[id].name : LIVERIES[id].name;
+    dialog('🛒 Beli ' + nm + '?', `Harga ${fmtRp(price)}. Saldo kamu ${fmtRp(save.money)} → sisa ${fmtRp(save.money - price)}.`, 'Beli Sekarang', () => {
+      if (save.money < price) return; save.money -= price; own.push(id); Snd.init(); Snd.ding(); use(); flashMsg(`✅ ${nm} sudah jadi milikmu dan langsung dipakai!`); });
+    return; }
+  use();
+  function use() { if (kind === 'bus') save.bus = id; else save.livery = id; persist(); buildGarage(); refreshMoney(); refreshShowroom(); }
 }
-function flashMsg(m) { alert(m); }
+function dialog(title, msg, yesText, onYes) { $('#dlgT').textContent = title; $('#dlgM').textContent = msg; $('#dlgYes').textContent = yesText || 'OK';
+  $('#dlgNo').classList.toggle('hidden', !onYes); $('#scrDlg').classList.remove('hidden');
+  $('#dlgYes').onclick = () => { $('#scrDlg').classList.add('hidden'); onYes && onYes(); }; $('#dlgNo').onclick = () => $('#scrDlg').classList.add('hidden'); }
+function flashMsg(m) { dialog('Info', m, 'OK'); }
 function refreshMoney() { document.querySelectorAll('.money').forEach(e => e.textContent = fmtRp(save.money)); $('#curBus').textContent = `${BUSES[save.bus].name} · ${LIVERIES[save.livery].name}`; }
 function showScreen(name, keepState) {
   ['Main', 'Map', 'Garage', 'Help', 'Pause', 'Finish'].forEach(n => $('#scr' + n).classList.toggle('hidden', n.toLowerCase() !== name));
