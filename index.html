@@ -1667,7 +1667,9 @@ function updateAnims(dt) { for (let i = anims.length - 1; i >= 0; i--) { const a
 
 /* ===================== CAMERA ===================== */
 const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _look = new THREE.Vector3();
+const _fppOff = new THREE.Vector3();
 function updateCamera(dt) {
+  { const f = camMode === 1 ? (camera.aspect < 1 ? 78 : 66) : 60; if (camera.fov !== f) { camera.fov = f; camera.updateProjectionMatrix(); } }
   const t = B.t, g = busObj.group;
   if (camMode === 0) {
     camYaw *= drag ? 1 : Math.max(0, 1 - dt * 0.6);
@@ -1678,8 +1680,8 @@ function updateCamera(dt) {
     camera.lookAt(B.x + Math.sin(B.h) * 5, B.y + t.h * 0.75, B.z + Math.cos(B.h) * 5);
   } else if (camMode === 1) {
     if (!drag) { camYaw *= Math.max(0, 1 - dt * 1.5); camPitch *= Math.max(0, 1 - dt * 1.5); }
-    camera.position.copy(g.localToWorld(_v.copy(busObj.drv)));
-    g.getWorldQuaternion(_q); _e.set(camPitch * 0.6 - (camera.aspect < 1 ? 0.22 : 0.12), Math.PI + camYaw - B.steer * 0.25, 0, 'YXZ'); camera.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromEuler(_e));
+    camera.position.copy(g.localToWorld(_v.copy(busObj.drv).add(_fppOff.set(0, 0.12, -0.22 - Math.max(0, camZoom) * 0.05))));
+    g.getWorldQuaternion(_q); _e.set(camPitch * 0.6 - (camera.aspect < 1 ? 0.03 : 0.07), Math.PI + camYaw - B.steer * 0.25, 0, 'YXZ'); camera.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromEuler(_e));
   } else if (camMode === 2) { // side view: shows door & wheels
     const lp = g.localToWorld(_v.set(t.w / 2 + 7 + camZoom * 0.5, 2.4 + camPitch * 6, t.len * 0.15 + camYaw * 8)); camera.position.lerp(lp, 1 - Math.exp(-dt * 6));
     camera.lookAt(g.localToWorld(_look.set(0, 1.4, t.len * 0.12)));
