@@ -439,12 +439,14 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 composer.addPass(new OutputPass());
 addEventListener('resize', () => setPR(pr));
 
+const MOBILE = matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
 let pr = Math.min(devicePixelRatio, 1.5), fpsAcc = 0, fpsN = 0;
 function setPR(v) { pr = v; renderer.setPixelRatio(pr); composer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); }
 function adaptRes(dt) { // dynamic resolution keeps the frame rate smooth on weaker GPUs
   fpsAcc += dt; fpsN++; if (fpsAcc < 1.5) return; const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
-  const max = Math.min(devicePixelRatio, HD() ? 1.5 : 1.25);
-  if (fps < 40 && pr > 0.6) setPR(Math.max(0.6, pr - 0.15)); else if (fps > 56 && pr < max) setPR(Math.min(max, pr + 0.1)); }
+  // phones: never drop below the screen's CSS resolution (sub-1 looks blocky on dense screens) and accept ~30 fps
+  const max = Math.min(devicePixelRatio, HD() || MOBILE ? 1.5 : 1.25), min = MOBILE ? Math.min(1, devicePixelRatio) : 0.6, low = MOBILE ? 26 : 40, high = MOBILE ? 45 : 56;
+  if (fps < low && pr > min) setPR(Math.max(min, pr - 0.1)); else if (fps > high && pr < max) setPR(Math.min(max, pr + 0.1)); }
 setPR(pr);
 function renderWorld() { if (HD() && (TIMES[save.time].night || pr >= 0.9)) composer.render(); else renderer.render(scene, camera); }
 
@@ -848,14 +850,14 @@ function makeBus(typeId, livId, dest, live = false) {
   g.add(swheel);
   // centre console angled towards the driver: switch rows, media screen, radio, tachograph, cup holder
   { const cg = new THREE.Group(); cg.position.set(cx, fy, Z(0.95)); cg.rotation.y = 0.45;
-    const sw = canvasTex(256, 400, (x, w, h) => { x.fillStyle = '#26292d'; x.fillRect(0, 0, w, h);
+    const sw = canvasTex(512, 800, (x, w, h) => { x.scale(2, 2); w = 256; h = 400; x.fillStyle = '#26292d'; x.fillRect(0, 0, w, h);
       for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { x.fillStyle = '#111316'; x.fillRect(18 + c * 56, 14 + r * 30, 46, 22); x.fillStyle = ['#3fe07a', '#ffb020', '#5aa9ff', '#ddd'][(r + c) % 4]; x.fillRect(22 + c * 56, 18 + r * 30, 6, 4); }
       x.fillStyle = '#0b0c0e'; x.fillRect(16, 140, w - 32, 120); const g2 = x.createLinearGradient(0, 146, 0, 254); g2.addColorStop(0, '#173a5a'); g2.addColorStop(1, '#0d1d2c'); x.fillStyle = g2; x.fillRect(22, 146, w - 44, 108);
       x.fillStyle = '#d2b06a'; x.font = '700 22px Georgia'; x.textAlign = 'center'; x.fillText('NUSANTARA', w / 2, 180); x.fillStyle = '#9fd3ff'; x.font = '600 14px Poppins'; x.fillText('♪ Radio Dangdut FM 98.7', w / 2, 210); x.fillText('🌡 22°C  •  AC AUTO', w / 2, 236);
       x.fillStyle = '#111316'; x.fillRect(22, 280, w - 44, 46); x.fillStyle = '#7dff9a'; x.font = '700 16px monospace'; x.fillText('FM 98.7  ▶  CH 07', w / 2, 309);
       for (let c = 0; c < 6; c++) { x.fillStyle = '#16181b'; x.beginPath(); x.arc(36 + c * 37, 360, 13, 0, 7); x.fill(); } });
     cg.add(bx(0.38, 0.52, 0.26, 0, 0, 0.78, 0, dashD)); const fp = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), new THREE.MeshBasicMaterial({ map: sw })); fp.rotation.y = Math.PI; fp.position.set(0, 0.78, -0.132); cg.add(fp);
-    const lt = canvasTex(128, 192, (x, w, h) => { x.fillStyle = '#2c2f33'; x.fillRect(0, 0, w, h); x.fillStyle = '#0d0e10'; x.fillRect(14, 16, w - 28, 44); x.fillStyle = '#7dff9a'; x.font = '700 15px monospace'; x.fillText('TACHO 08:42', 20, 44); x.fillStyle = '#16181b'; x.fillRect(14, 80, w - 28, 30); x.fillStyle = '#d7192d'; x.fillRect(22, 88, 16, 14); });
+    const lt = canvasTex(256, 384, (x, w, h) => { x.scale(2, 2); w = 128; h = 192; x.fillStyle = '#2c2f33'; x.fillRect(0, 0, w, h); x.fillStyle = '#0d0e10'; x.fillRect(14, 16, w - 28, 44); x.fillStyle = '#7dff9a'; x.font = '700 15px monospace'; x.fillText('TACHO 08:42', 20, 44); x.fillStyle = '#16181b'; x.fillRect(14, 80, w - 28, 30); x.fillStyle = '#d7192d'; x.fillRect(22, 88, 16, 14); });
     cg.add(bx(0.3, 0.52, 0.32, 0, 0.02, 0.26, -0.02, dashM)); const lp = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.4), new THREE.MeshBasicMaterial({ map: lt })); lp.rotation.y = Math.PI; lp.position.set(0.02, 0.3, -0.182); cg.add(lp);
     const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 16), blackM); cup.position.set(0.02, 0.53, -0.08); cg.add(cup); g.add(cg); }
   // driver's side panel: rear-camera monitor (live) + shifter
@@ -891,7 +893,7 @@ function makeBus(typeId, livId, dest, live = false) {
     const led = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xcfe6ff, emissiveIntensity: 1.6 }), rackM = cm(new THREE.Color(0xdfe3dd).lerp(tint, 0.25), new THREE.Color(0x1a1c1a).lerp(tint, 0.25));
     for (const [rx, sgn] of [[xi0 + 0.22, 1], [xi1 - 0.22, -1]]) { g.add(bx(0.44, 0.2, zS - z0, 0, rx, ceilY - 0.32, (z0 + zS) / 2, rackM)); g.add(bx(0.02, 0.03, zS - z0 - 0.4, 0, rx + sgn * 0.2, ceilY - 0.44, (z0 + zS) / 2, led)); }
     g.add(bx(0.08, 0.02, Lc - 1.2, 0, aisleX, ceilY - 0.012, (z0 + z1) / 2 - 0.4, led));
-    const tv = canvasTex(256, 144, (x, w, h) => { const gr = x.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#0e3b2a'); gr.addColorStop(1, '#1c6b4c'); x.fillStyle = gr; x.fillRect(0, 0, w, h); x.fillStyle = '#e2c27e'; x.font = '700 22px Georgia'; x.textAlign = 'center'; x.fillText('Selamat Datang', w / 2, 58); x.fillStyle = '#fff'; x.font = '600 15px Poppins'; x.fillText(L.name, w / 2, 86); x.fillText('Selamat menikmati perjalanan', w / 2, 112); });
+    const tv = canvasTex(512, 288, (x, w, h) => { x.scale(2, 2); w = 256; h = 144; const gr = x.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#0e3b2a'); gr.addColorStop(1, '#1c6b4c'); x.fillStyle = gr; x.fillRect(0, 0, w, h); x.fillStyle = '#e2c27e'; x.font = '700 22px Georgia'; x.textAlign = 'center'; x.fillText('Selamat Datang', w / 2, 58); x.fillStyle = '#fff'; x.font = '600 15px Poppins'; x.fillText(L.name, w / 2, 86); x.fillText('Selamat menikmati perjalanan', w / 2, 112); });
     g.add(bx(0.62, 0.38, 0.05, 0, aisleX, ceilY - 0.42, zS + 0.55, blackGloss)); { const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.32), new THREE.MeshBasicMaterial({ map: tv })); sc.rotation.y = Math.PI; sc.position.set(aisleX, ceilY - 0.42, zS + 0.524); g.add(sc); }
     const td = signPlane(signTex(128, 256, '#c9cfc8', '#1f2a24', [['🚻', 40, 0.3, 400], ['TOILET', 22, 0.5, 800]], '#7a827c'), 0.62, 1.85); td.position.set(xi0 + 0.45, fy + 0.95, z0 + 0.02); g.add(td);
   }
@@ -1026,7 +1028,7 @@ const UCYL = new THREE.CylinderGeometry(0.7, 1, 1, 10).translate(0, 0.5, 0);
 function instanced(geo, mat, list, shadow = true) {
   if (!list.length) return; const im = new THREE.InstancedMesh(geo, mat, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
   list.forEach((o, i) => { e.set(o.rx || 0, o.ry || 0, o.rz || 0); q.setFromEuler(e); v.set(o.x, o.y, o.z); sc.set(o.sx, o.sy, o.sz); m4.compose(v, q, sc); im.setMatrixAt(i, m4); if (o.c !== undefined) im.setColorAt(i, c.set(o.c)); });
-  im.castShadow = shadow; im.receiveShadow = true; world.add(im); return im;
+  im.castShadow = shadow && HD(); im.receiveShadow = true; world.add(im); return im;
 }
 function placeObj(obj, s, l, ry = 0, yOff = 0) { const p = pointAt(s, l); obj.position.set(p.x, groundH(s, l) + yOff, p.z); obj.rotation.y = p.h + ry; world.add(obj); return obj; }
 function signTex(w, h, bg, fg, lines, border) { return canvasTex(w, h, (x) => { x.fillStyle = bg; x.fillRect(0, 0, w, h); if (border) { x.strokeStyle = border; x.lineWidth = 8; x.strokeRect(8, 8, w - 16, h - 16); }
