@@ -319,6 +319,7 @@ body.touch #gauge{width:230px;height:88px}
   <!-- PAUSE -->
   <div class="modal hidden" id="scrPause"><div class="card">
     <h2>⏸ Jeda</h2><p class="small" id="pauseInfo"></p>
+    <div style="text-align:left;margin:8px 0"><label class="small">Ketajaman gambar</label><select id="optRes"><option value="auto">Otomatis (paling lancar)</option><option value="tajam">Tajam (2×)</option><option value="maks">Paling tajam (resolusi penuh layar)</option></select><p class="small" id="resInfo" style="margin:4px 0 0"></p></div>
     <button class="big go" id="bResume">Lanjut Nyetir</button>
     <button class="big alt" id="bRestart">Ulangi Rute</button>
     <button class="big alt" id="bQuit">Keluar ke Menu</button>
@@ -440,10 +441,15 @@ composer.addPass(new OutputPass());
 addEventListener('resize', () => setPR(pr));
 
 const MOBILE = matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
-let pr = Math.min(devicePixelRatio, 1.5), fpsAcc = 0, fpsN = 0;
+// sharpness: 'tajam' / 'maks' lock the render resolution (no automatic drop), 'auto' adapts to the frame rate
+if (!save.res) save.res = MOBILE ? 'tajam' : 'auto';
+const resTarget = () => save.res === 'maks' ? Math.min(devicePixelRatio, 3) : save.res === 'tajam' ? Math.min(devicePixelRatio, 2) : 0;
+let pr = resTarget() || Math.min(devicePixelRatio, 1.5), fpsAcc = 0, fpsN = 0, lastFps = 0;
+function setRes(v) { save.res = v; persist(); setPR(resTarget() || Math.min(devicePixelRatio, 1.5)); }
 function setPR(v) { pr = v; renderer.setPixelRatio(pr); composer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); }
 function adaptRes(dt) { // dynamic resolution keeps the frame rate smooth on weaker GPUs
-  fpsAcc += dt; fpsN++; if (fpsAcc < 1.5) return; const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
+  fpsAcc += dt; fpsN++; if (fpsAcc < 1.5) return; const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; lastFps = fps;
+  if (resTarget()) return;
   // phones: never drop below the screen's CSS resolution (sub-1 looks blocky on dense screens) and accept ~30 fps
   const max = Math.min(devicePixelRatio, HD() || MOBILE ? 1.5 : 1.25), min = MOBILE ? Math.min(1, devicePixelRatio) : 0.6, low = MOBILE ? 26 : 40, high = MOBILE ? 45 : 56;
   if (fps < low && pr > min) setPR(Math.max(min, pr - 0.1)); else if (fps > high && pr < max) setPR(Math.min(max, pr + 0.1)); }
@@ -1846,10 +1852,11 @@ function finishRoute() {
   $('#hud').classList.add('hidden'); showScreen('finish', true);
 }
 function pause(on) {
-  if (on && state === 'drive') { state = 'pause'; Snd.engine(0, 0, false); Snd.hornOff(); $('#pauseInfo').textContent = RUN.route.name; showScreen('pause', true); }
+  if (on && state === 'drive') { state = 'pause'; Snd.engine(0, 0, false); Snd.hornOff(); $('#pauseInfo').textContent = RUN.route.name; $('#optRes').value = save.res; $('#resInfo').textContent = `Render ${pr.toFixed(2)}× · layar ${devicePixelRatio.toFixed(2)}× · ${Math.round(lastFps)} fps`; showScreen('pause', true); }
   else if (!on && state === 'pause') { state = 'drive'; showScreen(null); lastT = performance.now(); }
 }
 $('#bResume').onclick = () => pause(false);
+$('#optRes').onchange = e => { setRes(e.target.value); renderWorld(); $('#resInfo').textContent = `Render ${pr.toFixed(2)}× · layar ${devicePixelRatio.toFixed(2)}× · ${Math.round(lastFps)} fps (terakhir)`; };
 $('#bRestart').onclick = () => { state = 'menu'; startRoute(RUN.route.id); };
 $('#bQuit').onclick = () => { quitToMenu(); };
 function quitToMenu() { state = 'menu'; Snd.engine(0, 0, false); $('#hud').classList.add('hidden'); disposeWorld(); showScreen('main'); }
