@@ -440,6 +440,11 @@ const LIVERIES = {
   merapi: { name: 'PO Merapi Jaya', base: '#1f7a3a', stripes: [['#f2c230', 0.6, 0.12], ['#ffffff', 0.78, 0.05]], text: '#f2c230', stroke: '#0d3a1a', price: 750000 },
   senja: { name: 'PO Sinar Senja', base: '#ff7a1a', grad: ['#ffb22a', '#8a2a9a'], stripes: [['#ffffff', 0.7, 0.05]], text: '#ffffff', stroke: '#5a1a6a', price: 1200000 },
   kenari: { name: 'PO Kenari Emas', base: '#f7c600', stripes: [['#111111', 0.6, 0.18], ['#d0101a', 0.85, 0.05]], text: '#111111', stroke: '#ffffff', price: 1500000 },
+  nusatrans: { name: 'Nusa Trans Shuttle', travel: true, sub: 'DOOR TO DOOR • AC • WIFI', base: '#f4f6f8', stripes: [['#0b4ea2', 0.55, 0.22], ['#38b6ff', 0.82, 0.07]], text: '#0b4ea2', stroke: '#ffffff', price: 0 },
+  kilat: { name: 'Kilat Travel', travel: true, sub: 'CEPAT • TEPAT WAKTU • AMAN', base: '#ffd400', stripes: [['#111111', 0.58, 0.22], ['#d7192d', 0.84, 0.06]], text: '#111111', stroke: '#ffffff', price: 300000 },
+  merahputih: { name: 'Merah Putih Travel', travel: true, sub: 'ANTAR JEMPUT • AC • NYAMAN', base: '#ffffff', stripes: [['#d7192d', 0.55, 0.32]], text: '#d7192d', stroke: '#ffffff', price: 400000 },
+  pelangi: { name: 'Pelangi Shuttle', travel: true, sub: 'SHUTTLE ANTAR KOTA • WIFI', base: '#ff5f6d', grad: ['#ff7a59', '#7a5cff'], stripes: [['#ffffff', 0.72, 0.05]], text: '#ffffff', stroke: '#4a2a8a', price: 500000 },
+  eksekutif: { name: 'Eksekutif Black Shuttle', travel: true, sub: 'VIP • CAPTAIN SEAT • USB', base: '#15171a', paint: '#15171a', metal: true, swoosh: '#d2b06a', serif: true, stripes: [], text: '#e2c27e', stroke: 'rgba(0,0,0,0)', price: 900000 },
   batik: { name: 'PO Batik Mulia', base: '#6b3a1e', batik: true, stripes: [['#e8c27a', 0.5, 0.05]], text: '#f3d9a0', stroke: '#3a1d0c', price: 2500000 },
 };
 const FARE_PER_KM = 260;
@@ -447,9 +452,10 @@ const DS = 2; // track sample step (m)
 
 /* ===================== SAVE ===================== */
 const SAVE_KEY = 'bsn-save-v1';
-let save = { money: 300000, buses: ['medium'], liveries: ['garuda', 'zamrud'], bus: 'medium', livery: 'zamrud', done: {}, time: 'siang', traffic: 'sedang', sound: true, route: 'jktbdg', gfx: (matchMedia('(pointer:coarse)').matches ? 'ringan' : 'hd') };
+let save = { money: 300000, buses: ['medium'], liveries: ['garuda', 'zamrud', 'nusatrans'], bus: 'medium', livery: 'zamrud', done: {}, time: 'siang', traffic: 'sedang', sound: true, route: 'jktbdg', gfx: (matchMedia('(pointer:coarse)').matches ? 'ringan' : 'hd') };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) save = Object.assign(save, s); } catch (e) {}
 if (!save.liveries.includes('zamrud')) save.liveries.push('zamrud');
+if (!save.liveries.includes('nusatrans')) save.liveries.push('nusatrans');
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 
 /* ===================== RENDERER ===================== */
@@ -653,7 +659,7 @@ function drawSide(x, w, h, t, L) {
   else { x.font = `italic 900 ${fs}px "Arial Black", Poppins, sans-serif`; x.lineWidth = 7; x.strokeStyle = L.stroke;
     x.strokeText(L.name.toUpperCase(), w / 2, ty); x.fillStyle = L.text; x.fillText(L.name.toUpperCase(), w / 2, ty);
     x.font = `700 ${fs * 0.34}px Poppins, sans-serif`; x.lineWidth = 3; const sy = ty + fs * 0.62;
-    x.strokeText('EKSEKUTIF • AC • TOILET • WIFI', w / 2, sy); x.fillText('EKSEKUTIF • AC • TOILET • WIFI', w / 2, sy); }
+    const sub = L.sub || 'EKSEKUTIF • AC • TOILET • WIFI'; x.strokeText(sub, w / 2, sy); x.fillText(sub, w / 2, sy); }
   const g = x.createLinearGradient(0, zb * h, 0, h); g.addColorStop(0, '#15181c'); g.addColorStop(1, '#050607'); x.fillStyle = g; x.fillRect(0, zb * h, w, h * (1 - zb));
   // luggage bay doors between the axles (u: 0 = rear, 1 = front)
   const hl = t.len / 2, Hb = t.h - 0.42, fa = hl - 2.5, ra = -hl + 2.7, z0 = ra + 0.95, z1 = fa - 0.95, U = z => (z + hl) / t.len * w, Y = y => (1 - y / Hb) * h;
@@ -1350,7 +1356,7 @@ function buildTerminalComplex(st, k, name, R, zoneMat) {
   }
   const bayS = signPlane(signTex(512, 128, '#0b4ea2', '#ffffff', [['JALUR 1 • ' + (T.cs[k + 1] ? T.cs[k + 1][0].toUpperCase() : 'AKHIR'), 50, 0.52, 900]]), 4.6, 1.15); bayS.position.set(13.2, 4.4, -21); bayS.rotation.y = Math.PI; g.add(bayS);
   // parked buses from other PO
-  const livs = Object.keys(LIVERIES).filter(l => l !== save.livery), cities = Object.values(CITIES).map(c => c[0].toUpperCase());
+  const livs = Object.keys(LIVERIES).filter(l => l !== save.livery && !LIVERIES[l].travel), cities = Object.values(CITIES).map(c => c[0].toUpperCase());
   for (const [lx, z, typ] of [[18.6, -11, 'hdd'], [18.6, 12, 'medium'], [25.6, -2, k % 2 ? 'sdd' : 'hdd']]) {
     const pb = makeBus(typ, livs[Math.floor(R() * livs.length)], cities[Math.floor(R() * cities.length)]); pb.group.remove(pb.spot, pb.spot.target);
     pb.group.position.set(lx, 0.05, z); g.add(pb.group); const L = BUSES[typ].len / 2 + 0.4; ob(lx - 1.35, lx + 1.35, z - L, z + L);
@@ -1381,7 +1387,7 @@ function buildTerminalComplex(st, k, name, R, zoneMat) {
     for (let z = -48; z <= 48; z += 12) { g.add(bx(0.8, roofY, 0.8, 0, 29.4, roofY / 2, z, conc), bx(0.84, 1.0, 0.84, 0, 29.4, 0.5, z, M(0xf2c200))); RUN.obst.push({ l0: 28.9, l1: 29.9, s0: st + z - 0.5, s1: st + z + 0.5 }); }
     for (const cx of [11.5, 18.6, 25.6]) g.add(bx(0.3, 0.08, TERM_S * 2 - 14, 0, cx, roofY - 0.02, 0, strip));
     for (let z = -44; z <= 44; z += 22) g.add(bx(TERM_L1 - 8, 0.08, 0.3, 0, (6 + TERM_L1) / 2, roofY - 0.02, z, strip));
-    const livs2 = Object.keys(LIVERIES).filter(l => l !== save.livery);
+    const livs2 = Object.keys(LIVERIES).filter(l => l !== save.livery && !LIVERIES[l].travel);
     for (const [lx, z, typ] of [[25.6, 24, 'medium'], [18.6, -40, 'hdd'], [25.6, -36, 'sdd'], [36, 36, 'hdd']]) {
       const pb = makeBus(typ, livs2[Math.floor(R() * livs2.length)], 'DEPO'); pb.group.remove(pb.spot, pb.spot.target); pb.group.position.set(lx, 0.05, z); if (lx > 30) pb.group.rotation.y = Math.PI / 2; g.add(pb.group);
       const L2 = BUSES[typ].len / 2 + 0.4; if (lx < 30) RUN.obst.push({ l0: lx - 1.35, l1: lx + 1.35, s0: st + z - L2, s1: st + z + L2 }); }
@@ -2071,12 +2077,14 @@ function routeKm(r) { let s = 0; for (let i = 0; i < r.stops.length - 1; i++) s 
 function buildGarage() {
   $('#busList').innerHTML = Object.entries(BUSES).map(([id, b]) => { const own = save.buses.includes(id);
     return `<button class="item ${save.bus === id ? 'sel' : ''}" data-b="${id}"><div class="t"><b>${b.name}</b><span>${b.desc} · ${b.cap} kursi · ${b.vmax} km/jam</span></div><div class="p ${own ? 'own' : ''}">${save.bus === id ? 'DIPAKAI' : own ? 'PUNYA' : fmtRp(b.price)}</div></button>`; }).join('');
-  $('#livList').innerHTML = Object.entries(LIVERIES).map(([id, l]) => { const own = save.liveries.includes(id), bg = l.grad ? `linear-gradient(90deg,${l.grad[0]},${l.grad[1]})` : `linear-gradient(180deg,${l.base} 55%,${l.swoosh || (l.stripes[0] ? l.stripes[0][0] : l.text)} 55%)`;
-    return `<button class="item ${save.livery === id ? 'sel' : ''}" data-l="${id}"><div class="sw" style="background:${bg}"></div><div class="t"><b>${l.name}</b></div><div class="p ${own ? 'own' : ''}">${save.livery === id ? 'DIPAKAI' : own ? 'PUNYA' : fmtRp(l.price)}</div></button>`; }).join('');
+  const isTravel = !!BUSES[save.bus].small, livOrder = Object.entries(LIVERIES).sort((a, b) => (isTravel ? (b[1].travel ? 1 : 0) - (a[1].travel ? 1 : 0) : (a[1].travel ? 1 : 0) - (b[1].travel ? 1 : 0)));
+  $('#livList').innerHTML = livOrder.map(([id, l]) => { const own = save.liveries.includes(id), lock = l.travel && !isTravel, bg = l.grad ? `linear-gradient(90deg,${l.grad[0]},${l.grad[1]})` : `linear-gradient(180deg,${l.base} 55%,${l.swoosh || (l.stripes[0] ? l.stripes[0][0] : l.text)} 55%)`;
+    return `<button class="item ${save.livery === id ? 'sel' : ''}" data-l="${id}" style="${lock ? 'opacity:.45' : ''}"><div class="sw" style="background:${bg}"></div><div class="t"><b>${l.name}</b>${l.travel ? '<span>🚐 Khusus Travel Minibus</span>' : ''}</div><div class="p ${own ? 'own' : ''}">${save.livery === id ? 'DIPAKAI' : own ? 'PUNYA' : fmtRp(l.price)}</div></button>`; }).join('');
   $('#busList').querySelectorAll('.item').forEach(el => el.onclick = () => buy('bus', el.dataset.b));
   $('#livList').querySelectorAll('.item').forEach(el => el.onclick = () => buy('liv', el.dataset.l));
 }
 function buy(kind, id) {
+  if (kind === 'liv' && LIVERIES[id].travel && !BUSES[save.bus].small) { flashMsg('🚐 Livery ini khusus untuk Travel Minibus. Pilih Travel Minibus dulu di daftar kendaraan.'); return; }
   const own = kind === 'bus' ? save.buses : save.liveries, price = kind === 'bus' ? BUSES[id].price : LIVERIES[id].price;
   if (!own.includes(id)) { if (save.money < price) { flashMsg('Saldo belum cukup! Selesaikan rute dulu untuk cari uang.'); return; }
     const nm = kind === 'bus' ? BUSES[id].name : LIVERIES[id].name;
@@ -2084,7 +2092,7 @@ function buy(kind, id) {
       if (save.money < price) return; save.money -= price; own.push(id); Snd.init(); Snd.ding(); use(); flashMsg(`✅ ${nm} sudah jadi milikmu dan langsung dipakai!`); });
     return; }
   use();
-  function use() { if (kind === 'bus') save.bus = id; else save.livery = id; persist(); buildGarage(); refreshMoney(); refreshShowroom(); }
+  function use() { if (kind === 'bus') { save.bus = id; if (!BUSES[id].small && LIVERIES[save.livery].travel) save.livery = 'zamrud'; } else save.livery = id; persist(); buildGarage(); refreshMoney(); refreshShowroom(); }
 }
 function dialog(title, msg, yesText, onYes) { $('#dlgT').textContent = title; $('#dlgM').textContent = msg; $('#dlgYes').textContent = yesText || 'OK';
   $('#dlgNo').classList.toggle('hidden', !onYes); $('#scrDlg').classList.remove('hidden');
