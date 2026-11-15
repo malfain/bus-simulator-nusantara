@@ -979,17 +979,25 @@ function buildTrack(route, seed) {
   let x = 0, z = 0, h = 0;
   for (let i = 0; i < N; i++) { const s = i * DS; X[i] = x; Z[i] = z; H[i] = h;
     const w = smooth(70, 240, nearStop(s)[0]);
-    const c = (nc(s / 650) * 0.8 + nc(s / 190 + 77) * 0.3) * (1 / 400) * route.curvy * w - h * 0.0008;
-    h = clamp(h + c * DS, -0.75, 0.75); x += Math.sin(h) * DS; z += Math.cos(h) * DS; }
+    const bend = clamp((nc(s / 430) * 0.95 + nc(s / 150 + 77) * 0.5) * route.curvy * 1.35, -1, 1);   // ±1 → radius 140 m
+    const c = bend / 140 * w - h * 0.0005;
+    h = clamp(h + c * DS, -1.25, 1.25); x += Math.sin(h) * DS; z += Math.cos(h) * DS; }
   const rawE = s => route.hilly * (ne(s / 520) * 24 + ne2(s / 140) * 2.5);
   for (let i = 0; i < N; i++) { const s = i * DS, [nd, ns] = nearStop(s); Y[i] = lerp(rawE(ns), rawE(s), smooth(70, 260, nd)); }
   const kmCum = [0]; segKm.forEach((k, i) => kmCum.push(kmCum[i] + k));
   T = { route, cs, segKm, segLen, stopS, spbu, total, N, X, Z, Y, H, kmCum };
+  const G = new Map(), C = 25; for (let i = 0; i < N; i += 2) { const k = (Math.floor(X[i] / C) + 5000) * 10000 + Math.floor(Z[i] / C) + 5000; let a = G.get(k); if (!a) G.set(k, a = []); a.push(i); }
+  T.grid = G;
 }
 const _tp = { x: 0, y: 0, z: 0, h: 0 };
 function trackAt(s, out = _tp) { const f = clamp(s / DS, 0, T.N - 1.001), i = Math.floor(f), t = f - i;
   out.x = lerp(T.X[i], T.X[i + 1], t); out.z = lerp(T.Z[i], T.Z[i + 1], t); out.y = lerp(T.Y[i], T.Y[i + 1], t); out.h = lerp(T.H[i], T.H[i + 1], t); return out; }
 function pointAt(s, l, out = { x: 0, y: 0, z: 0, h: 0 }) { trackAt(s, out); out.x += Math.cos(out.h) * l; out.z -= Math.sin(out.h) * l; return out; }
+function roadNear(x, z) { // nearest road sample: { d (m), i (sample index) }
+  const C = 25, cx = Math.floor(x / C), cz = Math.floor(z / C); let bd = 1e18, bi = 0;
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const arr = T.grid.get((cx + a + 5000) * 10000 + cz + b + 5000); if (!arr) continue;
+    for (const i of arr) { const dx = x - T.X[i], dz = z - T.Z[i], d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
+  return { d: Math.sqrt(bd), i: bi }; }
 function townW(s) { let w = 0; for (const st of T.stopS) w = Math.max(w, 1 - smooth(150, 320, Math.abs(s - st))); return w; }
 function groundH(s, l) {
   const al = Math.abs(l), base = trackAt(s).y - 0.15; if (al < 5) return base;
@@ -1038,9 +1046,13 @@ function buildTerrain() {
   const cG = new THREE.Color(REG.grass), cH = new THREE.Color(REG.hill), cS = new THREE.Color(REG.sawah), cW = new THREE.Color(REG.water), cD = new THREE.Color(0x8d7d5c), cT = new THREE.Color(0x9a9488), tmp = new THREE.Color();
   const p = {};
   for (let r = 0; r < rows; r++) { const s = r * step; trackAt(s, p); const ry = p.y, ch = Math.cos(p.h), sh = Math.sin(p.h), town = townW(s);
-    for (let c = 0; c < cols; c++) { const l = LS[c], k = r * cols + c, y = groundH(s, l), al = Math.abs(l);
-      pos[k * 3] = p.x + ch * l; pos[k * 3 + 1] = y; pos[k * 3 + 2] = p.z - sh * l; uvs[k * 2] = pos[k * 3] / 7; uvs[k * 2 + 1] = pos[k * 3 + 2] / 7;
-      if (al < 6.5) tmp.copy(town > 0.5 ? cT : cD);
+    const ti = clamp(Math.round(s / DS), 3, T.N - 4), curv = (T.H[ti + 3] - T.H[ti - 3]) / (6 * DS), inner = Math.sign(curv), Rr = curv ? 0.8 / Math.abs(curv) : 1e9;
+    for (let c = 0; c < cols; c++) { let l = LS[c]; if (l * inner > Rr) l = inner * Rr;   // keep the ribbon from folding over itself inside a bend
+      const k = r * cols + c, al = Math.abs(l); let y = groundH(s, l);
+      pos[k * 3] = p.x + ch * l; pos[k * 3 + 2] = p.z - sh * l;
+      let other = 1e9; if (al > 8) { const rn = roadNear(pos[k * 3], pos[k * 3 + 2]); if (Math.abs(rn.i * DS - s) > 30) { other = rn.d; y = lerp(T.Y[rn.i] - 0.18, y, smooth(7, 50, rn.d)); } }
+      pos[k * 3 + 1] = y; uvs[k * 2] = pos[k * 3] / 7; uvs[k * 2 + 1] = pos[k * 3 + 2] / 7;
+      if (al < 6.5 || other < 7) tmp.copy(town > 0.5 ? cT : cD);
       else if (sawahAt(s, l)) { tmp.copy(cS); if ((Math.floor(s / 16) + Math.floor(al / 18)) % 3 === 0) tmp.lerp(cW, 0.45); else if ((Math.floor(s / 16) + Math.floor(al / 18)) % 2) tmp.offsetHSL(0.02, 0, 0.03); }
       else { tmp.copy(cG).lerp(cH, smooth(2, 26, y - ry)); if (town > 0.6 && al < 70) tmp.lerp(cT, 0.35); }
       const v = 0.92 + GN2(s / 7, l / 7) * 0.08; col[k * 3] = tmp.r * v; col[k * 3 + 1] = tmp.g * v; col[k * 3 + 2] = tmp.b * v; }
@@ -1107,7 +1119,7 @@ function buildScenery(seed) {
   const nearTerm = (s) => T.stopS.some(st => Math.abs(s - st) < TERM_S + 8) || T.spbu.some(f => Math.abs(s - f) < SP_S + 8);
   const nearSp = (s) => T.spbu.some(f => Math.abs(s - f) < SP_S + 30);
   const p = {};
-  const put = (arr, s, l, sx, sy, sz, c, ry = 0, yo = 0, extra) => { if (l > 3.5 && l < SP_L1 + 6 && T.spbu.some(f => Math.abs(s - f) < SP_S + 6)) return; pointAt(s, l, p); arr.push(Object.assign({ x: p.x, y: groundH(s, l) + yo, z: p.z, ry: p.h + ry, sx, sy, sz, c }, extra)); };
+  const put = (arr, s, l, sx, sy, sz, c, ry = 0, yo = 0, extra) => { if (l > 3.5 && l < SP_L1 + 6 && T.spbu.some(f => Math.abs(s - f) < SP_S + 6)) return; pointAt(s, l, p); if (roadNear(p.x, p.z).d < 6.5 + Math.max(sx, sz) * 0.5) return; arr.push(Object.assign({ x: p.x, y: groundH(s, l) + yo, z: p.z, ry: p.h + ry, sx, sy, sz, c }, extra)); };
   const tree = (s, l) => { const h = 2 + R() * 3, cr = 1.8 + R() * 2.2; put(L.trunk, s, l, 0.25, h + cr * 0.5, 0.25, 0x5a3e28); const gc = [0x4f9a3a, 0x5fa83e, 0x46883a, 0x6aaa44][Math.floor(R() * 4)]; put(L.crown, s, l, cr, cr * (0.8 + R() * 0.4), cr, gc, R() * 6, h + cr * 0.6); };
   const palm = (s, l, h) => { const lean = (R() - 0.5) * 0.15; put(L.ptrunk, s, l, 0.22, h, 0.22, 0x7a6248, 0, 0, { rx: lean, rz: lean }); put(L.leaf, s, l, 1 + R() * 0.3, 1, 1 + R() * 0.3, [0x7aa848, 0x8ab850, 0x6a9a40][Math.floor(R() * 3)], R() * 6, h - 0.1); };
   const house = (s, l, side) => { const w = 6 + R() * 3, d = 6 + R() * 3, h = 2.8 + R() * 0.6, rc = roofs[Math.floor(R() * roofs.length)];
@@ -1136,13 +1148,14 @@ function buildScenery(seed) {
         if (R() < REG.palm * 0.12) { const l = side * (9 + R() * 50); if (!sawahAt(s, l)) palm(s, l, 7 + R() * 5); }
         if (kampung && R() < 0.33) { const l = side * (13 + R() * 28); if (!sawahAt(s, l)) house(s, l, side); }
         if (REG.sawit && GN(s / 500 + 9, side) > 0.15 && s % 10 < 5) for (let l = 22; l < 85; l += 9) palm(s, side * (l + (s % 20 < 10 ? 4.5 : 0)), 3.5 + R() * 1.5);
-        if (s - lastSpecial > 260 && R() < 0.02 && !nearSp(s)) {
+        const clearOf = (l, rad) => { const q = pointAt(s, l); return roadNear(q.x, q.z).d > rad; };
+        if (s - lastSpecial > 260 && R() < 0.02 && !nearSp(s) && clearOf(side * 28, 22)) {
           lastSpecial = s;
           if (REG.pura && nPura < 14 && R() < 0.7) { placeObj(makePura(), s, side * 12, 0); nPura++; }
           else if (REG.tongkonan && nTong < 14 && s > T.total * 0.45) { placeObj(makeTongkonan(roofs[1]), s, side * (16 + R() * 10), Math.PI / 2); nTong++; }
           else if (R() < REG.mosque && nMosque < 12) { placeObj(makeMosque(), s, side * 28, 0); nMosque++; }
         }
-        if (s - lastBill > 800 && R() < 0.03 && side > 0 && !nearSp(s)) { lastBill = s; placeObj(makeBillboard(Math.floor(R() * 6)), s, 10, 0); }
+        if (s - lastBill > 800 && R() < 0.03 && side > 0 && !nearSp(s) && clearOf(10, 8)) { lastBill = s; placeObj(makeBillboard(Math.floor(R() * 6)), s, 10, 0); }
       }
     }
   }
