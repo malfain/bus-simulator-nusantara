@@ -974,7 +974,16 @@ function buildTrack(route, seed) {
   const total = stopS[stopS.length - 1] + 320, N = Math.ceil(total / DS) + 3;
   const X = new Float32Array(N), Z = new Float32Array(N), Y = new Float32Array(N), H = new Float32Array(N);
   const nc = noise1(seed + 1), ne = noise1(seed + 2), ne2 = noise1(seed + 3);
-  const spbu = segLen.map((L, i) => stopS[i] + L * 0.5), sites = [...stopS, ...spbu];
+  const spbu = segLen.map((L, i) => stopS[i] + L * 0.5);
+  // junctions (pertigaan 'T' / perempatan 'X') every ~0.6-1 km, away from terminals & SPBU
+  const jr = rng(seed + 41), junc = [], names = ['Sukamaju', 'Sidomulyo', 'Tegalsari', 'Karanganyar', 'Margahayu', 'Sumberejo', 'Kampung Baru', 'Pasar Lama', 'Wonorejo', 'Cibeureum', 'Sukajadi', 'Mekarsari', 'Jatimulyo', 'Rawasari', 'Pondok Indah', 'Ngadirejo', 'Sindangsari', 'Gunungsari'];
+  let lastJ = -1e9, gapJ = 420;
+  for (let js = stopS[0] + 260; js < stopS[stopS.length - 1] - 260; js += 40) {
+    if (js - lastJ < gapJ || stopS.some(st => Math.abs(st - js) < 260) || spbu.some(f => Math.abs(f - js) < 160)) continue;
+    lastJ = js; gapJ = 450 + jr() * 350;
+    const type = jr() < 0.45 ? 'X' : 'T';
+    junc.push({ s: js, type, side: jr() < 0.5 ? 1 : -1, off: jr() * 26, nl: names[Math.floor(jr() * names.length)], nr: names[Math.floor(jr() * names.length)] }); }
+  const sites = [...stopS, ...spbu, ...junc.map(j => j.s)];
   const nearStop = s => { let nd = 1e9, ns = 0; for (const st of sites) { const d = Math.abs(s - st); if (d < nd) { nd = d; ns = st; } } return [nd, ns]; };
   let x = 0, z = 0, h = 0;
   for (let i = 0; i < N; i++) { const s = i * DS; X[i] = x; Z[i] = z; H[i] = h;
@@ -982,10 +991,14 @@ function buildTrack(route, seed) {
     const bend = clamp((nc(s / 430) * 0.95 + nc(s / 150 + 77) * 0.5) * route.curvy * 1.35, -1, 1);   // ±1 → radius 140 m
     const c = bend / 140 * w - h * 0.0005;
     h = clamp(h + c * DS, -1.25, 1.25); x += Math.sin(h) * DS; z += Math.cos(h) * DS; }
-  const rawE = s => route.hilly * (ne(s / 520) * 24 + ne2(s / 140) * 2.5);
+  const rawE = s => route.hilly * (ne(s / 600) * 50 + ne2(s / 170) * 7);
   for (let i = 0; i < N; i++) { const s = i * DS, [nd, ns] = nearStop(s); Y[i] = lerp(rawE(ns), rawE(s), smooth(70, 260, nd)); }
+  // keep climbs/descents drivable: limit the grade (≈6% flat routes … 12% mountain routes)
+  const maxG = (0.06 + 0.05 * Math.min(1.2, route.hilly)) * DS;
+  for (let i = 1; i < N; i++) Y[i] = clamp(Y[i], Y[i - 1] - maxG, Y[i - 1] + maxG);
+  for (let i = N - 2; i >= 0; i--) Y[i] = clamp(Y[i], Y[i + 1] - maxG, Y[i + 1] + maxG);
   const kmCum = [0]; segKm.forEach((k, i) => kmCum.push(kmCum[i] + k));
-  T = { route, cs, segKm, segLen, stopS, spbu, total, N, X, Z, Y, H, kmCum };
+  T = { route, cs, segKm, segLen, stopS, spbu, junc, total, N, X, Z, Y, H, kmCum };
   const G = new Map(), C = 25; for (let i = 0; i < N; i += 2) { const k = (Math.floor(X[i] / C) + 5000) * 10000 + Math.floor(Z[i] / C) + 5000; let a = G.get(k); if (!a) G.set(k, a = []); a.push(i); }
   T.grid = G;
 }
@@ -998,6 +1011,8 @@ function roadNear(x, z) { // nearest road sample: { d (m), i (sample index) }
   for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const arr = T.grid.get((cx + a + 5000) * 10000 + cz + b + 5000); if (!arr) continue;
     for (const i of arr) { const dx = x - T.X[i], dz = z - T.Z[i], d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
   return { d: Math.sqrt(bd), i: bi }; }
+const SIDE_L = 140;
+function onSideRoad(s, l, m = 0) { return T.junc.some(J => Math.abs(s - J.s) < 4 + m && (J.type === 'X' || Math.sign(l) === J.side) && Math.abs(l) < SIDE_L + m); }
 function townW(s) { let w = 0; for (const st of T.stopS) w = Math.max(w, 1 - smooth(150, 320, Math.abs(s - st))); return w; }
 function groundH(s, l) {
   const al = Math.abs(l), base = trackAt(s).y - 0.15; if (al < 5) return base;
@@ -1008,6 +1023,8 @@ function groundH(s, l) {
   const hill = T.route.hilly * (1 - town * 0.85);
   y += smooth(16, 170, al) * (n * 0.5 + 0.55) * 46 * hill + smooth(10, 60, al) * n2 * 1.0 * (1 - town);
   y += smooth(180, 240, al) * 10;
+  for (const J of T.junc) { const ds = Math.abs(s - J.s); if (ds < 24 && (J.type === 'X' || Math.sign(l) === J.side) && al < SIDE_L + 16) {
+    const f = (1 - smooth(9, 22, ds)) * (1 - smooth(SIDE_L, SIDE_L + 15, al)); y = lerp(y, base, f); } }
   return y;
 }
 function sawahAt(s, l) { const al = Math.abs(l); if (al < 10 || al > 170 || townW(s) > 0.3) return false; return GN2(s / 260 + 50, l / 260) > 0.45 - REG.sawahAmt * 0.7; }
@@ -1119,7 +1136,7 @@ function buildScenery(seed) {
   const nearTerm = (s) => T.stopS.some(st => Math.abs(s - st) < TERM_S + 8) || T.spbu.some(f => Math.abs(s - f) < SP_S + 8);
   const nearSp = (s) => T.spbu.some(f => Math.abs(s - f) < SP_S + 30);
   const p = {};
-  const put = (arr, s, l, sx, sy, sz, c, ry = 0, yo = 0, extra) => { if (l > 3.5 && l < SP_L1 + 6 && T.spbu.some(f => Math.abs(s - f) < SP_S + 6)) return; pointAt(s, l, p); if (roadNear(p.x, p.z).d < 6.5 + Math.max(sx, sz) * 0.5) return; arr.push(Object.assign({ x: p.x, y: groundH(s, l) + yo, z: p.z, ry: p.h + ry, sx, sy, sz, c }, extra)); };
+  const put = (arr, s, l, sx, sy, sz, c, ry = 0, yo = 0, extra) => { if (l > 3.5 && l < SP_L1 + 6 && T.spbu.some(f => Math.abs(s - f) < SP_S + 6)) return; pointAt(s, l, p); if (roadNear(p.x, p.z).d < 6.5 + Math.max(sx, sz) * 0.5 || onSideRoad(s, l, 5 + Math.max(sx, sz) * 0.5)) return; arr.push(Object.assign({ x: p.x, y: groundH(s, l) + yo, z: p.z, ry: p.h + ry, sx, sy, sz, c }, extra)); };
   const tree = (s, l) => { const h = 2 + R() * 3, cr = 1.8 + R() * 2.2; put(L.trunk, s, l, 0.25, h + cr * 0.5, 0.25, 0x5a3e28); const gc = [0x4f9a3a, 0x5fa83e, 0x46883a, 0x6aaa44][Math.floor(R() * 4)]; put(L.crown, s, l, cr, cr * (0.8 + R() * 0.4), cr, gc, R() * 6, h + cr * 0.6); };
   const palm = (s, l, h) => { const lean = (R() - 0.5) * 0.15; put(L.ptrunk, s, l, 0.22, h, 0.22, 0x7a6248, 0, 0, { rx: lean, rz: lean }); put(L.leaf, s, l, 1 + R() * 0.3, 1, 1 + R() * 0.3, [0x7aa848, 0x8ab850, 0x6a9a40][Math.floor(R() * 3)], R() * 6, h - 0.1); };
   const house = (s, l, side) => { const w = 6 + R() * 3, d = 6 + R() * 3, h = 2.8 + R() * 0.6, rc = roofs[Math.floor(R() * roofs.length)];
@@ -1187,6 +1204,67 @@ function inTermArea(s, l) { return l > 4.2 && l < TERM_L1 && T.stopS.some(st => 
 const apronTex = () => rtex('apron', 512, 512, (x, w, h) => { x.fillStyle = '#4a4d50'; x.fillRect(0, 0, w, h); speckle(x, w, h, 16000, 30, 110, 2.5);
   x.strokeStyle = 'rgba(25,25,25,.5)'; x.lineWidth = 2; for (let i = 0; i <= w; i += 128) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(w, i); x.stroke(); }
   for (let i = 0; i < 8; i++) { x.fillStyle = 'rgba(20,20,20,.25)'; x.beginPath(); x.ellipse(Math.random() * w, Math.random() * h, 20 + Math.random() * 40, 10 + Math.random() * 20, Math.random() * 3, 0, 7); x.fill(); } }, 1);
+const sideRoadTex = () => rtex('sideroad', 512, 128, (x, w, h) => { x.fillStyle = '#3e4145'; x.fillRect(0, 0, w, h); speckle(x, w, h, 5000, 30, 100, 2);
+  x.fillStyle = '#e8e8e2'; for (let i = 0; i < w; i += 64) x.fillRect(i, h / 2 - 2, 34, 4); x.fillRect(0, 6, w, 3); x.fillRect(0, h - 9, w, 3); });
+function lightHead(g, x, y, z, ry) { // returns the 3 lamp materials [red, yellow, green]
+  const hd = new THREE.Group(); hd.position.set(x, y, z); hd.rotation.y = ry; hd.add(bx(0.38, 1.1, 0.3, 0x15181c)); const ms = [];
+  [[0xff2a2a, 0.34], [0xffc21a, 0], [0x2aff6a, -0.34]].forEach(([c, yy]) => { const m = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: c, emissiveIntensity: 0.05 }); const l = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), m); l.position.set(0, yy, -0.16); hd.add(l); ms.push(m); });
+  g.add(hd); return ms; }
+function buildJunction(J) {
+  const g = new THREE.Group(), sides = J.type === 'X' ? [1, -1] : [J.side], std = o => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.85 }, o));
+  const tex = sideRoadTex().clone(); tex.needsUpdate = true; tex.wrapS = THREE.RepeatWrapping; tex.repeat.set((SIDE_L - 4.5) / 9, 1);
+  const paint = M(0xf2f2ee);
+  for (const sd of sides) {
+    const rd = new THREE.Mesh(new THREE.PlaneGeometry(SIDE_L - 4.5, 7), std({ map: tex })); rd.rotation.x = -Math.PI / 2; rd.position.set(sd * (4.5 + SIDE_L) / 2, 0.025, 0); rd.receiveShadow = true; g.add(rd);
+    g.add(bx(0.4, 0.02, 3.4, 0, sd * 7.2, 0.04, sd * -1.75, paint));                                        // stop line on the side road
+    for (let i = 0; i < 5; i++) g.add(bx(1.6, 0.02, 0.5, 0, sd * 9.4, 0.04, -3 + i * 1.5, paint));               // zebra crossing
+    const sg = new THREE.Group(); sg.add(cy(0.07, 3, 0x999999, 0, 1.5, 0)); const sp = signPlane(signTex(256, 96, '#0f4fa8', '#ffffff', [[(sd > 0 ? '⬅ ' : '') + (sd > 0 ? J.nl : J.nr) + (sd < 0 ? ' ➡' : ''), 34, 0.55, 800]], '#ffffff'), 2.2, 0.8);
+    sp.position.y = 3.1; sp.rotation.y = Math.PI; sg.add(sp); sg.position.set(sd * 6.2, 0, -12); g.add(sg);
+  }
+  // main-road stop lines + a direction sign before the junction
+  g.add(bx(3.4, 0.02, 0.4, 0, 1.75, 0.04, -9, paint), bx(3.4, 0.02, 0.4, 0, -1.75, 0.04, 9, paint));
+  J.lights = null;
+  if (J.type === 'X') { // working traffic lights on overhead arms
+    const arm = (x, z, ry, armDir) => { const a = new THREE.Group(); a.position.set(x, 0, z); a.rotation.y = ry; a.add(cy(0.12, 6, 0x6a6e73, 0, 3, 0)); a.add(bx(0.12, 0.12, 4, 0x6a6e73, 0, 5.8, -2 * armDir)); g.add(a); return a; };
+    const A = arm(6.3, -9.5, 0, -1), Bm = arm(-6.3, 9.5, Math.PI, -1), C = arm(-9.5, -6.3, Math.PI / 2, -1), D = arm(9.5, 6.3, -Math.PI / 2, -1);
+    J.lights = { main: [lightHead(A, 0, 5.2, 3.6, Math.PI), lightHead(Bm, 0, 5.2, 3.6, Math.PI)], side: [lightHead(C, 0, 5.2, 3.6, Math.PI), lightHead(D, 0, 5.2, 3.6, Math.PI)] };
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const p = pointAt(J.s, 0); g.position.set(p.x, trackAt(J.s).y, p.z); g.rotation.y = p.h; world.add(g); J.g = g;
+  const ds = new THREE.Group(); ds.add(cy(0.08, 4, 0x999999, -1.4, 2, 0), cy(0.08, 4, 0x999999, 1.4, 2, 0));
+  const txt = J.type === 'X' ? [[`⬅ ${J.nl}`, 38, 0.3, 800], ['⬆ ' + (T.cs[Math.min(T.cs.length - 1, T.stopS.findIndex(st => st > J.s))] || T.cs[T.cs.length - 1])[0], 38, 0.55, 900], [`${J.nr} ➡`, 38, 0.8, 800]]
+    : [[J.side > 0 ? `⬅ ${J.nl}` : `${J.nr} ➡`, 40, 0.38, 800], ['⬆ ' + (T.cs[Math.min(T.cs.length - 1, T.stopS.findIndex(st => st > J.s))] || T.cs[T.cs.length - 1])[0], 40, 0.72, 900]];
+  const dp = signPlane(signTex(512, 256, '#0f7a3a', '#ffffff', txt, '#ffffff'), 4.2, 2.1); dp.position.y = 4.4; dp.rotation.y = Math.PI; ds.add(dp); placeObj(ds, J.s - 110, 6.4, 0);
+  // vehicles that cross (perempatan) or wait to pull out (pertigaan)
+  const Rr = rng(Math.floor(J.s));
+  for (const sd of sides) { const v = makeVehicle(['car', 'motor', 'angkot', 'travel'][Math.floor(Rr() * 4)], Rr); world.add(v.g);
+    RUN.cross.push({ J, v, sd, x: sd * (30 + Rr() * 60), spd: 0, wait: Rr() * 4 }); }
+}
+function junctionPhase(J) { const t = (RUN.time + J.off) % 26; return t < 12 ? 'G' : t < 15 ? 'Y' : 'R'; }   // main road; side road green while main is red
+function updateJunctions(dt) {
+  for (const J of T.junc) {
+    if (J.lights && Math.abs(J.s - B.s) < 400) { const ph = junctionPhase(J), t = (RUN.time + J.off) % 26, sph = t >= 15 && t < 23 ? 'G' : t >= 23 ? 'Y' : 'R';
+      const set = (ms, p) => ms.forEach(m3 => { m3[0].emissiveIntensity = p === 'R' ? 3 : 0.05; m3[1].emissiveIntensity = p === 'Y' ? 3 : 0.05; m3[2].emissiveIntensity = p === 'G' ? 3 : 0.05; });
+      set(J.lights.main, ph); set(J.lights.side, sph); J.sph = sph; }
+    // running a red light: friendly warning only
+    const line = J.s - 9; if (J.lights && J.lastS !== undefined && J.lastS < line && B.s >= line && B.v > 2 && junctionPhase(J) === 'R') toast('🚦 Menerobos lampu merah! Hati-hati ya', 'bad', 2.2);
+    J.lastS = B.s;
+  }
+  const busInBox = J => Math.abs(B.s - J.s) < 9 + B.t.len / 2 && Math.abs(B.lat) < 7;
+  for (const c of RUN.cross) { const J = c.J; if (Math.abs(J.s - B.s) > 420) { c.v.g.visible = false; continue; } c.v.g.visible = true;
+    const dirX = -c.sd;                                           // drives from its side road towards (and across) the main road
+    let go = J.type === 'X' ? J.sph === 'G' : (c.wait -= dt) < 0 && Math.abs(B.s - J.s) > 40 && !traffic.some(v => Math.abs(v.s - J.s) < 25);
+    const stopX = c.sd * 8.5, before = (c.x - stopX) * dirX < 0;
+    let target = 9; if (before && (!go || busInBox(J)) && Math.abs(c.x - stopX) < 14) target = Math.abs(c.x - stopX) < 1.2 ? 0 : 3;
+    if (J.type === 'T' && !before) target = 0;                    // pertigaan: pull up to the line, then wait there
+    c.spd += clamp(target - c.spd, -8 * dt, 3 * dt); c.x += dirX * c.spd * dt;
+    if (c.x * dirX > SIDE_L * 0.7) { c.x = c.sd * (60 + Math.random() * 50); c.spd = 0; c.wait = 3 + Math.random() * 6; }   // looped back to its own side road
+    if (J.type === 'T' && !before && c.spd < 0.1) { c.wait -= dt; if (c.wait < -6) { c.x = c.sd * (60 + Math.random() * 40); c.wait = 4 + Math.random() * 8; } }
+    const lane = dirX > 0 ? -1.75 : 1.75, p = pointAt(J.s + lane, c.x); c.v.g.position.set(p.x, trackAt(J.s).y + 0.03, p.z); c.v.g.rotation.y = p.h + (dirX > 0 ? Math.PI / 2 : -Math.PI / 2);
+    // collision with the bus (no fines)
+    if (RUN.crashCD <= 0 && Math.abs(J.s - B.s) < 20) { const dx = p.x - B.x, dz = p.z - B.z, fz = dx * Math.sin(B.h) + dz * Math.cos(B.h), lx = dx * Math.cos(B.h) - dz * Math.sin(B.h);
+      if (Math.abs(fz) < B.t.len / 2 + 1.2 && Math.abs(lx) < B.t.w / 2 + 1.6) { RUN.crashCD = 2.5; penalize(0, 0, '💥 Awas kendaraan dari samping!'); Snd.noise(0.5, 300, 0.6, 0.5); B.v *= 0.3; c.spd = 0; } } }
+}
 function buildSPBU(fs) {
   const g = new THREE.Group(), ob = (l0, l1, s0, s1) => RUN.obst.push({ l0, l1, s0: fs + s0, s1: fs + s1 });
   const std = o => new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.8, metalness: 0 }, o));
@@ -1346,6 +1424,7 @@ function buildTerminals(seed) {
     }
   });
   T.spbu.forEach(fs => buildSPBU(fs));
+  RUN.cross = []; T.junc.forEach(buildJunction);
   // end barrier
   const bar = new THREE.Group(); for (let i = -4; i <= 4; i++) bar.add(bx(1, 1, 0.4, i % 2 ? 0xffffff : 0xd7192d, i, 0.7, 0)); placeObj(bar, T.total - 30, 0, 0, 0.15);
 }
@@ -1368,6 +1447,12 @@ function makeVehicle(type, R) {
     g.add(bx(2.4, 2.2, 1.9, cc, 0, 1.75, 3.0), bx(2.3, 0.8, 0.05, 0x223344, 0, 2.3, 3.96), bx(2.5, 2.6, 5.6, [0x8a5a3a, 0x6a6a6a, 0x2a4a8a][Math.floor(R() * 3)], 0, 2.0, -0.9), bx(2.3, 0.3, 7.6, 0x222222, 0, 0.7, 0));
     wheel(1.05, 2.8, 0.5); wheel(-1.05, 2.8, 0.5); wheel(1.05, -2.2, 0.5); wheel(-1.05, -2.2, 0.5); wheel(1.05, -3.3, 0.5); wheel(-1.05, -3.3, 0.5);
     g.add(bx(0.3, 0.2, 0.02, 0, 0.8, 1.0, 3.96, head), bx(0.3, 0.2, 0.02, 0, -0.8, 1.0, 3.96, head), bx(0.3, 0.2, 0.02, 0, 0.9, 1.0, -3.72, tail), bx(0.3, 0.2, 0.02, 0, -0.9, 1.0, -3.72, tail));
+  } else if (type === 'travel') { len = 5.4; w = 1.9; const c = [0xf4f4f2, 0xdfe3e6, 0x1c1c1e, 0xf4f4f2][Math.floor(R() * 4)], st = [0x0b4ea2, 0xd7192d, 0x1f7a3a, 0xf2a900][Math.floor(R() * 4)];
+    g.add(bx(1.9, 1.7, 5.4, c, 0, 1.15, 0), bx(1.92, 0.55, 4.3, 0x1c2630, 0, 1.62, -0.35), bx(1.7, 0.6, 0.06, 0x1c2630, 0, 1.55, 2.69), bx(1.93, 0.14, 5.42, st, 0, 0.95, 0), bx(1.6, 0.1, 3.6, 0x333333, 0, 2.05, -0.4));
+    for (const sd of [1, -1]) { const tp = signPlane(canvasTex(256, 64, (x, ww, hh) => { x.fillStyle = 'rgba(0,0,0,0)'; x.clearRect(0, 0, ww, hh); x.fillStyle = '#' + st.toString(16).padStart(6, '0'); x.font = 'italic 900 40px Poppins, Arial'; x.textAlign = 'center'; x.fillText('TRAVEL', ww / 2, 46); }), 2.0, 0.5);
+      tp.material.transparent = true; tp.position.set(sd * 0.962, 0.72, -0.6); tp.rotation.y = sd * Math.PI / 2; g.add(tp); }
+    wheel(0.82, 1.75, 0.36); wheel(-0.82, 1.75, 0.36); wheel(0.82, -1.7, 0.36); wheel(-0.82, -1.7, 0.36);
+    g.add(bx(0.32, 0.16, 0.02, 0, 0.6, 0.75, 2.71, head), bx(0.32, 0.16, 0.02, 0, -0.6, 0.75, 2.71, head), bx(0.2, 0.4, 0.02, 0, 0.8, 1.0, -2.71, tail), bx(0.2, 0.4, 0.02, 0, -0.8, 1.0, -2.71, tail));
   } else if (type === 'angkot') { len = 4.1; w = 1.7; const c = [0x2a6fd0, 0x2fa84f, 0xd7192d, 0xf2d000, 0x30b0c0][Math.floor(R() * 5)];
     g.add(bx(1.7, 1.55, 4.1, c, 0, 1.2, 0), bx(1.72, 0.55, 2.6, 0x1c2630, 0, 1.6, -0.5), bx(1.6, 0.55, 0.05, 0x1c2630, 0, 1.6, 2.06), bx(1.72, 0.12, 4.12, 0xffffff, 0, 0.95, 0));
     wheel(0.75, 1.3); wheel(-0.75, 1.3); wheel(0.75, -1.3); wheel(-0.75, -1.3);
@@ -1428,7 +1513,7 @@ function buildRun(route) {
   // traffic
   traffic.forEach(v => world && world.remove(v.g)); traffic = [];
   const nT = { sepi: 10, sedang: 20, ramai: 32 }[save.traffic] || 20, R = rng(seed + 77);
-  for (let i = 0; i < nT; i++) { const r = R(), type = r < 0.38 ? 'motor' : r < 0.68 ? 'car' : r < 0.84 ? 'angkot' : 'truck'; const v = makeVehicle(type, R); v.dir = i % 5 < 3 ? 1 : -1; world.add(v.g); traffic.push(v); spawnVehicle(v, true); }
+  for (let i = 0; i < nT; i++) { const r = R(), type = r < 0.32 ? 'motor' : r < 0.56 ? 'car' : r < 0.68 ? 'angkot' : r < 0.85 ? 'travel' : 'truck'; const v = makeVehicle(type, R); v.dir = i % 5 < 3 ? 1 : -1; world.add(v.g); traffic.push(v); spawnVehicle(v, true); }
   anims = []; setCam(0);
   state = 'drive'; $('#hud').classList.remove('hidden');
   $('#hRoute').innerHTML = `🚌 <b>${route.name}</b> · ${LIVERIES[save.livery].name}`;
@@ -1436,7 +1521,7 @@ function buildRun(route) {
   toast(`Selamat datang di Terminal ${T.cs[0][0]}! Tekan <kbd>E</kbd> buka pintu untuk naikkan penumpang.`, '', 6);
   Snd.init(); lastT = performance.now();
 }
-function baseSpeed(type) { return { motor: 12 + Math.random() * 5, car: 15 + Math.random() * 6, angkot: 10 + Math.random() * 4, truck: 9 + Math.random() * 4 }[type]; }
+function baseSpeed(type) { return { motor: 12 + Math.random() * 5, car: 15 + Math.random() * 6, travel: 17 + Math.random() * 5, angkot: 10 + Math.random() * 4, truck: 9 + Math.random() * 4 }[type]; }
 function laneOf(v) { const off = v.type === 'motor' ? 3.7 : v.type === 'truck' ? 1.9 : 1.8; return v.dir * off; }
 function spawnVehicle(v, initial) {
   const bs = B ? B.s : T.stopS[0];
@@ -1609,7 +1694,7 @@ function update(dt) {
   if (down('Space')) acc -= Math.sign(B.v) * 9;
   // slope & resistance
   const i = B.idx, slope = (T.Y[Math.min(i + 2, T.N - 1)] - T.Y[Math.max(i - 2, 0)]) / (4 * DS) * Math.cos(B.h - T.H[i]);
-  acc -= 9.8 * slope * 0.55;
+  acc -= 9.8 * slope * 0.8;
   acc -= Math.sign(B.v) * (0.12 + 0.0012 * B.v * B.v);
   const inTerm = inSite(B.s, B.lat), off = Math.abs(B.lat) > 4.7 && !inTerm; if (off) acc -= Math.sign(B.v) * (1.2 + Math.abs(B.v) * 0.12);
   const prevV = B.v; B.v += acc * dt;
@@ -1653,7 +1738,7 @@ function update(dt) {
   if (Math.abs(B.steer) < 0.02 && Math.abs(B.v) > 8 && RUN.sigTime > 3) { B.sigL = B.sigR = false; }
   RUN.sigTime = (B.sigL || B.sigR) ? (RUN.sigTime || 0) + dt : 0;
 
-  updateTraffic(dt); updateStops(dt); updateAnims(dt); updateNavMarker(dt);
+  updateTraffic(dt); updateJunctions(dt); updateStops(dt); updateAnims(dt); updateNavMarker(dt);
   // town speed limit
   const town = townW(B.s) > 0.6; $('#hZone').classList.toggle('hidden', !town);
   RUN.speedCD -= dt; if (town && B.v * 3.6 > 60) { RUN.speedT += dt; if (RUN.speedT > 1.5 && RUN.speedCD <= 0) { penalize(25000, 0.3, '🐢 Pelan-pelan, ini zona kota!'); RUN.speedCD = 8; RUN.speedT = 0; } } else RUN.speedT = 0;
@@ -1676,6 +1761,8 @@ function updateTraffic(dt) {
     if (v.s < -1000) { if (Math.random() < dt) spawnVehicle(v); continue; }
     if (v.s < B.s - 260 || v.s > B.s + 1050 || v.s > T.total - 40 || v.s < 10) { spawnVehicle(v); continue; }
     let target = v.stun > 0 ? 0 : v.base; v.stun -= dt;
+    for (const J of T.junc) { if (!J.lights) continue; const line = J.s - 9 * v.dir, dl = (line - v.s) * v.dir - v.len / 2;
+      if (dl > -0.5 && dl < 35 && junctionPhase(J) !== 'G') target = Math.min(target, dl < 2 ? 0 : dl * 0.4); }
     const gap = 7 + v.spd * 1.5;
     for (const o of traffic) { if (o === v || o.dir !== v.dir || Math.abs(o.l - v.l) > 1.6) continue; const d = (o.s - v.s) * v.dir - (o.len + v.len) / 2; if (d > 0 && d < gap) target = Math.min(target, o.spd * (d < gap * 0.5 ? 0.6 : 1)); }
     const bd = (B.s - v.s) * v.dir - (t.len + v.len) / 2, inLane = Math.abs(B.lat - v.l) < (t.w + v.w) / 2 + 0.6;
@@ -1804,6 +1891,12 @@ function navInfo() {
   if (inT && B.lat > 6) return ['↱', 'Keluar terminal', 'Belok kanan ke jalan raya'];
   if (B.lat < -0.6 && !inT) return ['⬅', 'Kembali ke lajur kiri', 'Di Indonesia kita lajur kiri'];
   const segi = Math.max(0, k - 1), km = Math.max(0, d / T.segLen[segi] * T.segKm[segi]);
+  { const J = T.junc.find(J => J.s - B.s > 5 && J.s - B.s < 240); if (J) { const d = Math.round(J.s - 9 - B.s);
+      if (J.type === 'X') { const ph = junctionPhase(J); return ph === 'G' ? ['🚦', `Perempatan ${d} m · hijau`, `⬅ ${J.nl} · ${J.nr} ➡`] : ['🚦', `Lampu ${ph === 'R' ? 'merah' : 'kuning'} ${d} m`, 'Siap-siap berhenti di garis putih', true]; }
+      return ['⑂', `Pertigaan ${d} m`, 'Awas kendaraan keluar dari ' + (J.side > 0 ? J.nl + ' (kiri)' : J.nr + ' (kanan)'), true]; } }
+  { const i2 = Math.min(T.N - 1, B.idx + 60), gr = (T.Y[i2] - T.Y[B.idx]) / (DS * 60) * Math.cos(B.h - T.H[B.idx]) * (B.dir < 0 ? -1 : 1);
+    if (gr > 0.05) return ['⛰️', `Tanjakan ${Math.round(gr * 100)}%`, 'Tambah gas, jaga jarak'];
+    if (gr < -0.05) return ['⚠️', `Turunan curam ${Math.round(-gr * 100)}%`, 'Kurangi kecepatan, siap rem', true]; }
   for (let a = 20; a < 130; a += 5) { const j = Math.min(T.N - 1, B.idx + a), dh = T.H[j] - T.H[Math.min(T.N - 1, B.idx + 10)];
     if (Math.abs(dh) > 0.28) return [dh > 0 ? '↖' : '↗', `Tikungan ${dh > 0 ? 'kiri' : 'kanan'} ${a * DS} m`, `${km.toFixed(1)} km ke Terminal ${name}`, true]; }
   return ['⬆', km >= 1 ? `Lurus terus ${km.toFixed(1)} km` : `Lurus ${Math.round(d)} m`, `Menuju Terminal ${name}`];
@@ -1833,6 +1926,8 @@ function drawGPS() {
     pointAt(st, 30, p); const q = P(p.x, p.z); x.fillStyle = '#2f7ad0'; x.beginPath(); x.roundRect(q[0] - 13, q[1] - 13, 26, 26, 6); x.fill(); x.fillStyle = '#fff'; x.font = '900 18px Poppins'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('P', q[0], q[1] + 1); }
   for (const f of T.spbu) if (Math.abs(f - B.s) < 260) { x.fillStyle = '#3a4250'; x.beginPath(); [[-SP_S, 4.5], [SP_S, 4.5], [SP_S, SP_L1], [-SP_S, SP_L1]].forEach(([ds, l], i) => { pointAt(f + ds, l, p); const q = P(p.x, p.z); i ? x.lineTo(...q) : x.moveTo(...q); }); x.fill();
     pointAt(f, 18, p); const q = P(p.x, p.z); x.fillStyle = '#d7192d'; x.beginPath(); x.roundRect(q[0] - 13, q[1] - 13, 26, 26, 6); x.fill(); x.font = '16px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('⛽', q[0], q[1] + 1); }
+  for (const J of T.junc) if (Math.abs(J.s - B.s) < 260) for (const sd of (J.type === 'X' ? [1, -1] : [J.side])) { pointAt(J.s, sd * 4, p); const a = P(p.x, p.z); pointAt(J.s, sd * SIDE_L, p); const b2 = P(p.x, p.z);
+    x.strokeStyle = '#59606b'; x.lineWidth = 11; x.lineCap = 'round'; x.beginPath(); x.moveTo(...a); x.lineTo(...b2); x.stroke(); x.strokeStyle = '#7a828e'; x.lineWidth = 7; x.stroke(); }
   const i0 = Math.max(0, B.idx - 110), i1 = Math.min(T.N - 1, B.idx + 140);
   const line = (a, b, w, col) => { x.strokeStyle = col; x.lineWidth = w; x.lineCap = 'round'; x.lineJoin = 'round'; x.beginPath(); for (let i = a; i <= b; i += 2) { const q = P(T.X[i], T.Z[i]); i === a ? x.moveTo(...q) : x.lineTo(...q); } x.stroke(); };
   line(i0, i1, 16, '#59606b'); line(i0, i1, 11, '#7a828e');
